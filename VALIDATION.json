@@ -1,0 +1,12 @@
+{
+  "kotlin_parser": "tree-sitter-kotlin",
+  "kotlin_files_parsed": 10,
+  "kotlin_parse_errors": [],
+  "xml_files_parsed": 10,
+  "android_compilation_performed": false,
+  "junit_executed": false,
+  "device_tests_performed": false,
+  "reason": "Java and Android SDK unavailable in this environment",
+  "firmware_modified": false,
+  "history_limit_per_product": 32
+}
