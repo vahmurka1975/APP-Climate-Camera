@@ -1,0 +1,23 @@
+# Локальные данные Gradle и Kotlin
+.gradle/
+.kotlin/
+
+# Результаты сборки
+**/build/
+
+# Путь к Android SDK на конкретном компьютере
+local.properties
+
+# Локальные настройки Android Studio
+.idea/
+*.iml
+
+# Ключи подписи и локальные секреты
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+
+# Файлы операционной системы
+.DS_Store
+Thumbs.db
