@@ -1,8 +1,11 @@
 {
+  "fix": "Use initialWeight for add; keep weight for weigh; send selected slot id for both",
+  "source_repository": "https://github.com/vahmurka1975/APP-Climate-Camera",
   "kotlin_parser": "tree-sitter-kotlin",
   "kotlin_files_parsed": 10,
   "kotlin_parse_errors": [],
   "xml_files_parsed": 10,
+  "request_contract_static_checks_passed": true,
   "android_compilation_performed": false,
   "junit_executed": false,
   "device_tests_performed": false,

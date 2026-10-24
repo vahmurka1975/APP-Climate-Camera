@@ -214,9 +214,12 @@ private fun ProductEditor(mode: String, product: Product, today: String, busy: B
         }
     }, confirmButton = {
         TextButton(enabled = !busy && ready, onClick = {
-            val fields = mutableMapOf("weight" to parsedWeight.toString())
+            // ESP32 expects initialWeight for add, but weight for a control weighing.
+            val fields = mutableMapOf(
+                "id" to product.id.toString(),
+                (if (add) "initialWeight" else "weight") to parsedWeight.toString()
+            )
             if (add) { fields["startDate"] = date; fields["targetLossPct"] = parsedTarget.toString() }
-            else fields["id"] = product.id.toString()
             onSave(fields)
         }) { Text(if (busy) "Сохранение…" else "Сохранить") }
     }, dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Отмена") } })
