@@ -1,6 +1,7 @@
 package com.example.climatecamera
 
 import android.app.DatePickerDialog
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.Locale
@@ -41,9 +43,34 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
     var remove by remember { mutableStateOf<Product?>(null) }
     var exportText by remember { mutableStateOf("") }
     var refreshedAt by remember { mutableStateOf("") }
+    var receivedElapsed by remember { mutableStateOf<Long?>(null) }
+    var elapsedNow by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    var refreshFailed by remember { mutableStateOf(false) }
+    var needsVerification by remember { mutableStateOf(false) }
+    LaunchedEffect(settings) {
+        while (true) {
+            elapsedNow = SystemClock.elapsedRealtime()
+            delay(1_000)
+        }
+    }
+    val staleProducts = refreshFailed || FreshnessPolicy.stale(
+        receivedElapsed, elapsedNow, FreshnessPolicy.PRODUCTS_MAX_AGE_MS
+    )
+    val writeBlocked = busy || staleProducts || needsVerification
 
     suspend fun refresh() {
-        snapshot = withContext(Dispatchers.IO) { CameraTransport.products(settings) }
+        try {
+            snapshot = withContext(Dispatchers.IO) { CameraTransport.products(settings) }
+            receivedElapsed = SystemClock.elapsedRealtime()
+            elapsedNow = SystemClock.elapsedRealtime()
+            refreshFailed = false
+            needsVerification = false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            refreshFailed = true
+            throw e
+        }
         refreshedAt = java.text.SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(java.util.Date())
     }
     fun reload() {
@@ -54,22 +81,30 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
         }
     }
     fun mutate(action: String, fields: Map<String, String>) {
-        if (busy) return
+        if (busy || staleProducts || needsVerification) return
         busy = true
         message = ""
         error = null
         scope.launch {
             var committed = false
             try {
-                message = withContext(Dispatchers.IO) { CameraTransport.mutate(settings, action, fields) }
+                withContext(Dispatchers.IO) { CameraTransport.mutate(settings, action, fields) }
+                message = when (action) {
+                    "add" -> "ESP32 подтвердил загрузку нового продукта."
+                    "weigh" -> "ESP32 подтвердил сохранение контрольного веса."
+                    else -> "ESP32 подтвердил извлечение продукта и удаление его данных."
+                }
                 committed = true
                 editor = null
                 remove = null
                 history = null
                 refresh()
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                error = if (committed) "Изменение принято ESP32, но обновить список не удалось: ${e.message}. Нажмите «Обновить»."
-                else "${e.message}. Если связь прервалась, проверьте список перед повторной записью: запрос мог быть принят."
+                needsVerification = true
+                editor = null
+                remove = null
+                error = if (committed) "Изменение принято ESP32, но обновить список не удалось: ${e.message}. Нажмите «Обновить продукты». Не повторяйте запись."
+                else "${e.message}. Результат операции не подтверждён: запрос мог быть принят ESP32. Нажмите «Обновить продукты» и проверьте историю перед повтором. Автоматического повтора нет."
             } finally { busy = false }
         }
     }
@@ -96,10 +131,22 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
         Text("Контроль за весом продукта", style = MaterialTheme.typography.titleLarge)
         Text("Данные хранятся в ESP32. Прошивка 1.3.2 хранит до 32 контрольных взвешиваний на продукт. Старые записи нельзя восстановить экспортом.")
         Text("После 32 замеров приложение блокирует новую запись, чтобы прошивка не удалила самый старый замер. Для большей истории требуется доработка прошивки.")
-        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        if (busy) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text("Обмен с ESP32… Дождитесь ответа; повторная отправка заблокирована.")
+        }
+        if (snapshot != null) {
+            val age = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow) ?: 0
+            Text(
+                if (staleProducts) "Список устарел · получен $age с назад. Обновите продукты перед изменениями."
+                else "Список актуален · получен $age с назад",
+                color = if (staleProducts) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
+        }
+        if (needsVerification) Text("Новая запись заблокирована до успешного обновления списка. Сверьте последнее взвешивание и историю.", color = MaterialTheme.colorScheme.error)
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        OutlinedButton(onClick = { reload() }, enabled = !busy) { Text("Обновить продукты") }
+        OutlinedButton(onClick = { reload() }, enabled = !busy) { Text(if (busy) "Обновление…" else "Обновить продукты") }
         snapshot?.let { data ->
             Text("Занято ${data.products.count { it.active }} из 30 · Обновлено $refreshedAt")
             Text("Текущая дата ESP32: ${ProductDates.display(data.today)}")
@@ -109,7 +156,7 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
             if (data.readOnly) Text("Режим просмотра. Для изменения данных нужен администратор.")
             val free = data.products.firstOrNull { !it.active }
             Button(
-                enabled = !busy && !data.readOnly && free != null && ProductDates.valid(data.today),
+                enabled = !writeBlocked && !data.readOnly && free != null && ProductDates.valid(data.today),
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { selected = free; editor = "add" }
             ) { Text(if (free == null) "Все 30 слотов заняты" else "Загрузить новый продукт") }
@@ -133,14 +180,14 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
                             Text("Целевой вес: ${grams(product.targetWeight)} г")
                             Text("Прогноз достижения цели: ${product.forecast()}")
                             Text("Прогноз по средней потере веса, не подтверждение безопасности или готовности к употреблению.", style = MaterialTheme.typography.bodySmall)
-                            Button(enabled = !busy && !data.readOnly && ProductDates.valid(data.today) && product.history.size < 32, onClick = {
+                            Button(enabled = !writeBlocked && !data.readOnly && ProductDates.valid(data.today) && product.history.size < 32, onClick = {
                                 selected = product; editor = "weigh"
                             }) { Text("Взвесить") }
                             if (product.history.size >= 32) Text("Достигнут лимит 32 замеров. Сохраните CSV; для продолжения без потери истории обновите хранилище прошивки.")
                             OutlinedButton(enabled = !busy, onClick = { history = product }) {
                                 Text("История взвешиваний (${product.history.size})")
                             }
-                            OutlinedButton(enabled = !busy && !data.readOnly, onClick = { remove = product }) { Text("Извлечь продукт") }
+                            OutlinedButton(enabled = !writeBlocked && !data.readOnly, onClick = { remove = product }) { Text("Извлечь продукт") }
                         }
                     }
                 }
@@ -152,7 +199,7 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
     val editProduct = selected
     val current = snapshot
     if (editMode != null && editProduct != null && current != null) {
-        ProductEditor(editMode, editProduct, current.today, busy, onDismiss = { if (!busy) editor = null }, onSave = { fields ->
+        ProductEditor(editMode, editProduct, current.today, busy, staleProducts || needsVerification, onDismiss = { if (!busy) editor = null }, onSave = { fields ->
             mutate(editMode, fields)
         })
     }
@@ -173,13 +220,13 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
         AlertDialog(onDismissRequest = { if (!busy) remove = null }, title = { Text("Извлечь продукт №${product.id}?") }, text = {
             Text("Начальный вес и вся история будут удалены из памяти ESP32 без возможности отмены. При необходимости сначала сохраните CSV.")
         }, confirmButton = {
-            TextButton(enabled = !busy, onClick = { mutate("remove", mapOf("id" to product.id.toString())) }) { Text("Удалить данные") }
+            TextButton(enabled = !writeBlocked, onClick = { mutate("remove", mapOf("id" to product.id.toString())) }) { Text("Удалить данные") }
         }, dismissButton = { TextButton(enabled = !busy, onClick = { remove = null }) { Text("Отмена") } })
     }
 }
 
 @Composable
-private fun ProductEditor(mode: String, product: Product, today: String, busy: Boolean, onDismiss: () -> Unit, onSave: (Map<String, String>) -> Unit) {
+private fun ProductEditor(mode: String, product: Product, today: String, busy: Boolean, blocked: Boolean, onDismiss: () -> Unit, onSave: (Map<String, String>) -> Unit) {
     val context = LocalContext.current
     var weight by remember(mode, product.id) { mutableStateOf("") }
     var date by remember(mode, product.id) { mutableStateOf(today) }
@@ -193,6 +240,7 @@ private fun ProductEditor(mode: String, product: Product, today: String, busy: B
         Text(if (add) "Загрузить новый продукт" else "Взвесить продукт №${product.id}")
     }, text = {
         Column(modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (blocked) Text("Данные устарели. Закройте окно и нажмите «Обновить продукты» перед сохранением.", color = MaterialTheme.colorScheme.error)
             Text(if (add) "Первый свободный номер: №${product.id}. Номер окончательно назначает ESP32 при сохранении." else "Дата взвешивания: ${ProductDates.display(today)} · по часам ESP32")
             OutlinedTextField(value = weight, onValueChange = { weight = it }, label = { Text(if (add) "Первоначальный вес, г" else "Текущий вес, г") },
                 enabled = !busy, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
@@ -213,7 +261,7 @@ private fun ProductEditor(mode: String, product: Product, today: String, busy: B
             }
         }
     }, confirmButton = {
-        TextButton(enabled = !busy && ready, onClick = {
+        TextButton(enabled = !busy && !blocked && ready, onClick = {
             // ESP32 expects initialWeight for add, but weight for a control weighing.
             val fields = mutableMapOf(
                 "id" to product.id.toString(),

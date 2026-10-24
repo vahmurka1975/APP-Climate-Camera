@@ -1,6 +1,7 @@
 package com.example.climatecamera
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -91,6 +92,17 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var receivedAt by remember { mutableStateOf("") }
+    var receivedElapsed by remember { mutableStateOf<Long?>(null) }
+    var elapsedNow by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(connection) {
+        while (true) {
+            elapsedNow = SystemClock.elapsedRealtime()
+            delay(1_000)
+        }
+    }
+    val staleStatus = error != null || FreshnessPolicy.stale(
+        receivedElapsed, elapsedNow, FreshnessPolicy.STATUS_MAX_AGE_MS
+    )
     var selectedTab by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(connection) {
@@ -101,6 +113,8 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
 
             try {
                 status = loadStatus(settings)
+                receivedElapsed = SystemClock.elapsedRealtime()
+                elapsedNow = SystemClock.elapsedRealtime()
                 error = null
                 receivedAt = java.text.SimpleDateFormat(
                     "HH:mm:ss",
@@ -133,7 +147,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
         )
 
         Text(
-            text = "ESP32 · мониторинг",
+            text = "ESP32 · приложение v${BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.bodyMedium
         )
 
@@ -189,6 +203,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                             error = null
                             status = null
                             receivedAt = ""
+                            receivedElapsed = null
 
                             connection = ConnectionSettings(
                                 address = address.trim(),
@@ -252,6 +267,13 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
         }
 
         if (selectedTab == 0) status?.let { data ->
+            val age = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
+            Text(
+                text = if (staleStatus)
+                    "УСТАРЕВШИЕ ДАННЫЕ · последнее получение: ${age ?: 0} с назад. Состояния реле и показания ниже не подтверждены текущим ответом ESP32."
+                else "Данные актуальны · получены ${age ?: 0} с назад",
+                color = if (staleStatus) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
             Text(
                 text = if (connection == null) {
                     "Обновление остановлено. Показаны последние данные."

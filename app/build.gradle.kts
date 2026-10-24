@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.climatecamera"
         minSdk = 24
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.1-products"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -33,6 +33,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
