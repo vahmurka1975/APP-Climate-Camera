@@ -1,0 +1,26 @@
+{
+  "version": "1.0.6",
+  "versionCode": 7,
+  "base_commit": "ae0e4df8930861a1b46c178ce59acee6eca7f025",
+  "gradle_build": "BUILD SUCCESSFUL (saved log)",
+  "tests": {
+    "tests": 37,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "apk_zip_integrity": "passed",
+  "apk_signature": "apksigner verify passed",
+  "physical_device_tested": false,
+  "emulator_tested": false,
+  "repository_modified": false,
+  "repository_head_rechecked": false,
+  "changed_files": [
+    "app/build.gradle.kts",
+    "app/src/main/java/com/example/climatecamera/CameraSettingsScreen.kt",
+    "app/src/main/java/com/example/climatecamera/ConnectionPolicy.kt",
+    "app/src/main/java/com/example/climatecamera/MainActivity.kt",
+    "app/src/main/java/com/example/climatecamera/ReadbackPolicy.kt",
+    "app/src/test/java/com/example/climatecamera/Reliability106Test.kt"
+  ]
+}

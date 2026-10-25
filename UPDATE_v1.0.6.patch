@@ -1,0 +1,269 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 6
+-        versionName = "1.0.5"
++        versionCode = 7
++        versionName = "1.0.6"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/app/src/main/java/com/example/climatecamera/CameraSettingsScreen.kt
++++ b/app/src/main/java/com/example/climatecamera/CameraSettingsScreen.kt
+@@ -9,6 +9,7 @@
+ import androidx.compose.ui.unit.dp
+ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.delay
+ import kotlinx.coroutines.launch
+ import kotlinx.coroutines.withContext
+ 
+@@ -24,7 +25,8 @@
+     var saveNvs by remember { mutableStateOf(true) }
+     var message by remember { mutableStateOf("") }
+     var pending by remember { mutableStateOf<Map<String, String>?>(null) }
+-    suspend fun refresh() {
++    var confirmRefresh by remember { mutableStateOf(false) }
++    suspend fun refresh(): Map<String, String> {
+         verified = false
+         val status = withContext(Dispatchers.IO) { CameraTransport.status(connection) }
+         readOnly = status.optBoolean("readOnly", true)
+@@ -36,6 +38,16 @@
+         }
+         values = loaded; baseline = loaded
+         verified = !status.optBoolean("otaMode") && !status.optBoolean("uiEditing")
++        return loaded
++    }
++    fun requestRefresh() {
++        busy = true
++        scope.launch {
++            try { refresh(); message = "Настройки перечитаны с ESP32" }
++            catch (e: CancellationException) { throw e }
++            catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) }
++            finally { busy = false }
++        }
+     }
+     LaunchedEffect(connection) {
+         busy = true
+@@ -44,16 +56,20 @@
+     val normalized = CameraConfigFields.all.associate { it.key to it.normalized(values[it.key].orEmpty()) }
+     val changed = normalized.filter { (key, value) -> value != null && value.toDoubleOrNull() != baseline[key]?.toDoubleOrNull() }
+         .mapValues { it.value!! }
+-    val editable = verified && !readOnly && !busy
++    val editable = ReadbackPolicy.canEdit(verified, readOnly, busy)
+     Text("Настройки камеры", style = MaterialTheme.typography.titleLarge)
+     Text(if (readOnly) "Режим просмотра. Для редактирования подключитесь с правами администратора." else "Администратор · права подтверждены ESP32")
+     if (!verified) Text("Изменение заблокировано. Обновите форму; завершите OTA или локальное редактирование, если они активны.")
+     Button(enabled = !busy, onClick = {
+-        busy = true
+-        scope.launch {
+-            try { refresh(); message = "Настройки перечитаны с ESP32" } catch (e: CancellationException) { throw e } catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) } finally { busy = false }
+-        }
+-    }) { Text("Обновить форму (сбросить несохранённые изменения)") }
++        if (values != baseline) confirmRefresh = true else requestRefresh()
++    }) { Text("Обновить форму") }
++    if (confirmRefresh) {
++        AlertDialog(onDismissRequest = { confirmRefresh = false },
++            title = { Text("Сбросить несохранённые изменения?") },
++            text = { Text("Поля формы будут заменены текущими значениями ESP32. Команда записи не отправляется.") },
++            dismissButton = { TextButton(onClick = { confirmRefresh = false }) { Text("Отмена") } },
++            confirmButton = { TextButton(onClick = { confirmRefresh = false; requestRefresh() }) { Text("Перечитать") } })
++    }
+     CameraConfigFields.all.forEach { field ->
+         val value = values[field.key].orEmpty()
+         val invalid = values.isNotEmpty() && field.normalized(value) == null
+@@ -80,8 +96,33 @@
+                 scope.launch {
+                     try {
+                         val reply = withContext(Dispatchers.IO) { CameraTransport.saveConfig(connection, fields, baseline, saveNvs) }
+-                        message = reply
+-                        try { refresh(); message = "$reply. Текущие значения перечитаны с ESP32." } catch (e: CancellationException) { throw e } catch (e: Exception) { verified = false; message = "$reply. Не удалось перечитать значения: ${ConnectionPolicy.errorMessage(e)}" }
++                        // Exactly one POST above. Only GET readback may be retried below.
++                        var matched = false
++                        var lastDifferences = emptyList<String>()
++                        var lastReadError: String? = null
++                        for (attempt in 1..ReadbackPolicy.MAX_ATTEMPTS) {
++                            message = "$reply. Проверка значений: $attempt/${ReadbackPolicy.MAX_ATTEMPTS}…"
++                            try {
++                                val actual = refresh()
++                                lastDifferences = ReadbackPolicy.differences(fields, actual).map { key ->
++                                    val label = CameraConfigFields.all.first { it.key == key }.label
++                                    "$label: запрошено ${fields[key]}, получено ${actual[key] ?: "нет значения"}"
++                                }
++                                lastReadError = null
++                                if (lastDifferences.isEmpty()) { matched = true; break }
++                            } catch (e: CancellationException) { throw e }
++                            catch (e: Exception) { lastReadError = ConnectionPolicy.errorMessage(e) }
++                            if (attempt < ReadbackPolicy.MAX_ATTEMPTS) delay(ReadbackPolicy.RETRY_DELAY_MS)
++                        }
++                        if (matched) {
++                            message = "$reply. Отправленные значения подтверждены чтением ESP32. " +
++                                if (saveNvs) "Сохранение в NVS проверяется отдельно после перезапуска ESP32." else "Запрошено без сохранения в NVS."
++                        } else {
++                            verified = false
++                            message = "$reply. Результат записи НЕ подтверждён. " +
++                                (lastReadError ?: lastDifferences.joinToString("; ")) +
++                                ". POST не повторялся. Перечитайте форму перед дальнейшим изменением."
++                        }
+                     } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                         verified = false
+                         message = "${ConnectionPolicy.errorMessage(e)}. Если запрос был отправлен, изменение могло выполниться. Автоматического повтора нет: перечитайте форму и проверьте значения."
+--- a/app/src/main/java/com/example/climatecamera/ConnectionPolicy.kt
++++ b/app/src/main/java/com/example/climatecamera/ConnectionPolicy.kt
+@@ -5,7 +5,18 @@
+ import java.net.UnknownHostException
+ 
+ internal object ConnectionPolicy {
++    /** Delay after a completed GET; POST commands are never retried here. */
++    fun pollDelayMs(consecutiveFailures: Int): Long = when {
++        consecutiveFailures <= 1 -> 5_000L
++        consecutiveFailures == 2 -> 10_000L
++        consecutiveFailures == 3 -> 20_000L
++        else -> 30_000L
++    }
++
+     fun errorMessage(error: Exception): String = when (error) {
++        is javax.net.ssl.SSLHandshakeException -> "Не удалось проверить HTTPS-соединение. Проверьте сертификат камеры, имя узла и дату на телефоне. Проверка сертификатов не отключается."
++        is javax.net.ssl.SSLPeerUnverifiedException -> "HTTPS: сертификат не подтверждает адрес камеры. Используйте адрес из сертификата."
++        is javax.net.ssl.SSLException -> "Ошибка защищённого HTTPS-соединения. Проверьте настройки HTTPS на сервере."
+         is UnknownHostException -> "Адрес камеры не найден. Проверьте адрес и подключение к сети камеры."
+         is SocketTimeoutException -> "Камера не ответила вовремя. Проверьте связь с ESP32."
+         is ConnectException -> "Не удалось подключиться к камере. Проверьте питание, адрес и сеть."
+--- a/app/src/main/java/com/example/climatecamera/MainActivity.kt
++++ b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+@@ -94,6 +94,8 @@
+     var loading by remember { mutableStateOf(false) }
+     var error by remember { mutableStateOf<String?>(null) }
+     var receivedAt by remember { mutableStateOf("") }
++    var pollFailures by remember { mutableStateOf(0) }
++    var nextPollMs by remember { mutableStateOf(5_000L) }
+     var receivedElapsed by remember { mutableStateOf<Long?>(null) }
+     var elapsedNow by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+     LaunchedEffect(connection) {
+@@ -134,6 +136,8 @@
+ 
+ 
+     LaunchedEffect(connection) {
++        pollFailures = 0
++        nextPollMs = 5_000L
+         val settings = connection ?: return@LaunchedEffect
+ 
+         while (true) {
+@@ -141,6 +145,7 @@
+ 
+             try {
+                 status = loadStatus(settings)
++                pollFailures = 0
+                 receivedElapsed = SystemClock.elapsedRealtime()
+                 elapsedNow = SystemClock.elapsedRealtime()
+                 error = null
+@@ -154,11 +159,13 @@
+                 // Старые показания оставляем на экране,
+                 // но явно сообщаем об ошибке обновления.
+                 error = ConnectionPolicy.errorMessage(e)
++                pollFailures = (pollFailures + 1).coerceAtMost(4)
+             } finally {
+                 loading = false
+             }
+ 
+-            delay(5_000)
++            nextPollMs = ConnectionPolicy.pollDelayMs(pollFailures)
++            delay(nextPollMs)
+         }
+     }
+ 
+@@ -291,6 +298,10 @@
+                 MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+         )
+         if (receivedAt.isNotEmpty()) Text("Последний успешный ответ: $receivedAt")
++        if (connection != null && pollFailures > 0) {
++            Text(if (loading) "Повторное чтение данных…" else
++                "Восстановление связи: пауза между чтениями ${nextPollMs / 1000} с. Команды записи не повторяются.")
++        }
+ 
+         TabRow(selectedTabIndex = selectedTab) {
+             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ReadbackPolicy.kt
+@@ -0,0 +1,20 @@
++package com.example.climatecamera
++
++import kotlin.math.abs
++
++/** Comparison is about live values, not persistence in NVS. */
++internal object ReadbackPolicy {
++    const val MAX_ATTEMPTS = 3
++    const val RETRY_DELAY_MS = 500L
++
++    fun differences(expected: Map<String, String>, actual: Map<String, String>): List<String> =
++        expected.keys.filter { key ->
++            val wanted = expected[key]?.replace(',', '.')?.toDoubleOrNull()
++            val received = actual[key]?.replace(',', '.')?.toDoubleOrNull()
++            wanted == null || received == null || !wanted.isFinite() || !received.isFinite() ||
++                abs(wanted - received) > 0.00001
++        }
++
++    fun canEdit(verified: Boolean, readOnly: Boolean, busy: Boolean): Boolean =
++        verified && !readOnly && !busy
++}
+--- /dev/null
++++ b/app/src/test/java/com/example/climatecamera/Reliability106Test.kt
+@@ -0,0 +1,55 @@
++package com.example.climatecamera
++
++import org.junit.Assert.*
++import org.junit.Test
++import javax.net.ssl.SSLHandshakeException
++import javax.net.ssl.SSLPeerUnverifiedException
++import javax.net.ssl.SSLException
++
++class Reliability106Test {
++    @Test fun pollingBackoff() {
++        assertEquals(listOf(5000L, 5000L, 10000L, 20000L, 30000L, 30000L),
++            (0..5).map { ConnectionPolicy.pollDelayMs(it) })
++    }
++    @Test fun backoffIsBounded() {
++        assertEquals(30000L, ConnectionPolicy.pollDelayMs(Int.MAX_VALUE))
++        assertEquals(5000L, ConnectionPolicy.pollDelayMs(-1))
++    }
++    @Test fun numericFormattingDoesNotCauseMismatch() {
++        assertTrue(ReadbackPolicy.differences(mapOf("x" to "12.50"), mapOf("x" to "12,5")).isEmpty())
++    }
++    @Test fun floatRoundingIsTolerated() {
++        assertTrue(ReadbackPolicy.differences(mapOf("x" to "0.1"), mapOf("x" to "0.10000001")).isEmpty())
++    }
++    @Test fun changedValuesAreReported() {
++        assertEquals(listOf("x"), ReadbackPolicy.differences(mapOf("x" to "12"), mapOf("x" to "13")))
++    }
++    @Test fun absentValuesAreReported() {
++        assertEquals(listOf("x"), ReadbackPolicy.differences(mapOf("x" to "12"), emptyMap()))
++    }
++    @Test fun invalidNumbersNeverPass() {
++        for (bad in listOf("NaN", "Infinity", "oops", "")) {
++            assertEquals(listOf("x"), ReadbackPolicy.differences(mapOf("x" to "12"), mapOf("x" to bad)))
++            assertEquals(listOf("x"), ReadbackPolicy.differences(mapOf("x" to bad), mapOf("x" to "12")))
++        }
++    }
++    @Test fun unrelatedValuesAreIgnored() {
++        assertTrue(ReadbackPolicy.differences(mapOf("x" to "1"), mapOf("x" to "1", "y" to "9")).isEmpty())
++    }
++    @Test fun everyEditGateIsRequired() {
++        for (v in listOf(false, true)) for (r in listOf(false, true)) for (b in listOf(false, true)) {
++            assertEquals(v && !r && !b, ReadbackPolicy.canEdit(v, r, b))
++        }
++    }
++    @Test fun readbackHasSmallFiniteRetryBudget() {
++        assertEquals(3, ReadbackPolicy.MAX_ATTEMPTS)
++        assertEquals(500L, ReadbackPolicy.RETRY_DELAY_MS)
++    }
++    @Test fun certificateErrorsHaveSpecificMessage() {
++        assertTrue(ConnectionPolicy.errorMessage(SSLHandshakeException("x")).contains("сертификат"))
++        assertTrue(ConnectionPolicy.errorMessage(SSLPeerUnverifiedException("x")).contains("адрес"))
++    }
++    @Test fun tlsFailureIsNotReportedAsWrongPassword() {
++        assertTrue(ConnectionPolicy.errorMessage(SSLException("x")).contains("HTTPS"))
++    }
++}

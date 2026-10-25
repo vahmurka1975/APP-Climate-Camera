@@ -5,7 +5,18 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 internal object ConnectionPolicy {
+    /** Delay after a completed GET; POST commands are never retried here. */
+    fun pollDelayMs(consecutiveFailures: Int): Long = when {
+        consecutiveFailures <= 1 -> 5_000L
+        consecutiveFailures == 2 -> 10_000L
+        consecutiveFailures == 3 -> 20_000L
+        else -> 30_000L
+    }
+
     fun errorMessage(error: Exception): String = when (error) {
+        is javax.net.ssl.SSLHandshakeException -> "Не удалось проверить HTTPS-соединение. Проверьте сертификат камеры, имя узла и дату на телефоне. Проверка сертификатов не отключается."
+        is javax.net.ssl.SSLPeerUnverifiedException -> "HTTPS: сертификат не подтверждает адрес камеры. Используйте адрес из сертификата."
+        is javax.net.ssl.SSLException -> "Ошибка защищённого HTTPS-соединения. Проверьте настройки HTTPS на сервере."
         is UnknownHostException -> "Адрес камеры не найден. Проверьте адрес и подключение к сети камеры."
         is SocketTimeoutException -> "Камера не ответила вовремя. Проверьте связь с ESP32."
         is ConnectException -> "Не удалось подключиться к камере. Проверьте питание, адрес и сеть."

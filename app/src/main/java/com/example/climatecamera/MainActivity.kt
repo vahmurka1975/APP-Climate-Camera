@@ -94,6 +94,8 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var receivedAt by remember { mutableStateOf("") }
+    var pollFailures by remember { mutableStateOf(0) }
+    var nextPollMs by remember { mutableStateOf(5_000L) }
     var receivedElapsed by remember { mutableStateOf<Long?>(null) }
     var elapsedNow by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(connection) {
@@ -134,6 +136,8 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
 
 
     LaunchedEffect(connection) {
+        pollFailures = 0
+        nextPollMs = 5_000L
         val settings = connection ?: return@LaunchedEffect
 
         while (true) {
@@ -141,6 +145,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
 
             try {
                 status = loadStatus(settings)
+                pollFailures = 0
                 receivedElapsed = SystemClock.elapsedRealtime()
                 elapsedNow = SystemClock.elapsedRealtime()
                 error = null
@@ -154,11 +159,13 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 // Старые показания оставляем на экране,
                 // но явно сообщаем об ошибке обновления.
                 error = ConnectionPolicy.errorMessage(e)
+                pollFailures = (pollFailures + 1).coerceAtMost(4)
             } finally {
                 loading = false
             }
 
-            delay(5_000)
+            nextPollMs = ConnectionPolicy.pollDelayMs(pollFailures)
+            delay(nextPollMs)
         }
     }
 
@@ -291,6 +298,10 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
         )
         if (receivedAt.isNotEmpty()) Text("Последний успешный ответ: $receivedAt")
+        if (connection != null && pollFailures > 0) {
+            Text(if (loading) "Повторное чтение данных…" else
+                "Восстановление связи: пауза между чтениями ${nextPollMs / 1000} с. Команды записи не повторяются.")
+        }
 
         TabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })

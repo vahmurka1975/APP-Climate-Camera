@@ -9,6 +9,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -24,7 +25,8 @@ internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
     var saveNvs by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("") }
     var pending by remember { mutableStateOf<Map<String, String>?>(null) }
-    suspend fun refresh() {
+    var confirmRefresh by remember { mutableStateOf(false) }
+    suspend fun refresh(): Map<String, String> {
         verified = false
         val status = withContext(Dispatchers.IO) { CameraTransport.status(connection) }
         readOnly = status.optBoolean("readOnly", true)
@@ -36,6 +38,16 @@ internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
         }
         values = loaded; baseline = loaded
         verified = !status.optBoolean("otaMode") && !status.optBoolean("uiEditing")
+        return loaded
+    }
+    fun requestRefresh() {
+        busy = true
+        scope.launch {
+            try { refresh(); message = "Настройки перечитаны с ESP32" }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) }
+            finally { busy = false }
+        }
     }
     LaunchedEffect(connection) {
         busy = true
@@ -44,16 +56,20 @@ internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
     val normalized = CameraConfigFields.all.associate { it.key to it.normalized(values[it.key].orEmpty()) }
     val changed = normalized.filter { (key, value) -> value != null && value.toDoubleOrNull() != baseline[key]?.toDoubleOrNull() }
         .mapValues { it.value!! }
-    val editable = verified && !readOnly && !busy
+    val editable = ReadbackPolicy.canEdit(verified, readOnly, busy)
     Text("Настройки камеры", style = MaterialTheme.typography.titleLarge)
     Text(if (readOnly) "Режим просмотра. Для редактирования подключитесь с правами администратора." else "Администратор · права подтверждены ESP32")
     if (!verified) Text("Изменение заблокировано. Обновите форму; завершите OTA или локальное редактирование, если они активны.")
     Button(enabled = !busy, onClick = {
-        busy = true
-        scope.launch {
-            try { refresh(); message = "Настройки перечитаны с ESP32" } catch (e: CancellationException) { throw e } catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) } finally { busy = false }
-        }
-    }) { Text("Обновить форму (сбросить несохранённые изменения)") }
+        if (values != baseline) confirmRefresh = true else requestRefresh()
+    }) { Text("Обновить форму") }
+    if (confirmRefresh) {
+        AlertDialog(onDismissRequest = { confirmRefresh = false },
+            title = { Text("Сбросить несохранённые изменения?") },
+            text = { Text("Поля формы будут заменены текущими значениями ESP32. Команда записи не отправляется.") },
+            dismissButton = { TextButton(onClick = { confirmRefresh = false }) { Text("Отмена") } },
+            confirmButton = { TextButton(onClick = { confirmRefresh = false; requestRefresh() }) { Text("Перечитать") } })
+    }
     CameraConfigFields.all.forEach { field ->
         val value = values[field.key].orEmpty()
         val invalid = values.isNotEmpty() && field.normalized(value) == null
@@ -80,8 +96,33 @@ internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
                 scope.launch {
                     try {
                         val reply = withContext(Dispatchers.IO) { CameraTransport.saveConfig(connection, fields, baseline, saveNvs) }
-                        message = reply
-                        try { refresh(); message = "$reply. Текущие значения перечитаны с ESP32." } catch (e: CancellationException) { throw e } catch (e: Exception) { verified = false; message = "$reply. Не удалось перечитать значения: ${ConnectionPolicy.errorMessage(e)}" }
+                        // Exactly one POST above. Only GET readback may be retried below.
+                        var matched = false
+                        var lastDifferences = emptyList<String>()
+                        var lastReadError: String? = null
+                        for (attempt in 1..ReadbackPolicy.MAX_ATTEMPTS) {
+                            message = "$reply. Проверка значений: $attempt/${ReadbackPolicy.MAX_ATTEMPTS}…"
+                            try {
+                                val actual = refresh()
+                                lastDifferences = ReadbackPolicy.differences(fields, actual).map { key ->
+                                    val label = CameraConfigFields.all.first { it.key == key }.label
+                                    "$label: запрошено ${fields[key]}, получено ${actual[key] ?: "нет значения"}"
+                                }
+                                lastReadError = null
+                                if (lastDifferences.isEmpty()) { matched = true; break }
+                            } catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { lastReadError = ConnectionPolicy.errorMessage(e) }
+                            if (attempt < ReadbackPolicy.MAX_ATTEMPTS) delay(ReadbackPolicy.RETRY_DELAY_MS)
+                        }
+                        if (matched) {
+                            message = "$reply. Отправленные значения подтверждены чтением ESP32. " +
+                                if (saveNvs) "Сохранение в NVS проверяется отдельно после перезапуска ESP32." else "Запрошено без сохранения в NVS."
+                        } else {
+                            verified = false
+                            message = "$reply. Результат записи НЕ подтверждён. " +
+                                (lastReadError ?: lastDifferences.joinToString("; ")) +
+                                ". POST не повторялся. Перечитайте форму перед дальнейшим изменением."
+                        }
                     } catch (e: CancellationException) { throw e } catch (e: Exception) {
                         verified = false
                         message = "${ConnectionPolicy.errorMessage(e)}. Если запрос был отправлен, изменение могло выполниться. Автоматического повтора нет: перечитайте форму и проверьте значения."
