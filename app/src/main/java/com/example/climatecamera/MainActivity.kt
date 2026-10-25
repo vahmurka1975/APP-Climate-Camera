@@ -8,6 +8,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -110,6 +115,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
         receivedElapsed, elapsedNow, FreshnessPolicy.STATUS_MAX_AGE_MS
     )
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var connectionExpanded by rememberSaveable { mutableStateOf(true) }
     val context = LocalContext.current
     val store = remember(context) { ConnectionStore(context) }
     var rememberPassword by remember { mutableStateOf(false) }
@@ -171,33 +177,46 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text(
-            text = "Климатическая камера",
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Text(
-            text = "ESP32 · приложение v${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "Подключение",
-                    style = MaterialTheme.typography.titleMedium
-                )
-
+    LaunchedEffect(connection, status != null) {
+        if (connection != null && status != null) connectionExpanded = false
+    }
+    val sectionTitles = listOf("Камера", "Продукты", "Настройки", "Архив")
+    val scrollState = key(selectedTab) { rememberScrollState() }
+    Column(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(scrollState).padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("CLIMATE CAMERA", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                    Text(sectionTitles[selectedTab], style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold)
+                }
+                Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            ConnectionBanner(
+                label = ConnectionPolicy.label(connection != null, status != null, error != null, staleStatus),
+                detail = when {
+                    connection == null && status != null -> "Обновление остановлено · показаны последние данные"
+                    connection == null -> "Укажите адрес камеры и подключитесь"
+                    loading && pollFailures > 0 -> "Повторное чтение данных…"
+                    pollFailures > 0 -> "Повторное чтение через интервал ${nextPollMs / 1000} с"
+                    receivedAt.isNotEmpty() -> "Последний ответ: $receivedAt"
+                    else -> "Ожидание первого ответа ESP32"
+                },
+                warning = connection != null && (error != null || staleStatus),
+                active = connection != null && status != null && error == null && !staleStatus,
+                onClick = { connectionExpanded = !connectionExpanded },
+                expanded = connectionExpanded
+            )
+            if (connectionExpanded) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Подключение к камере", style = MaterialTheme.typography.titleLarge)
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
@@ -286,64 +305,35 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                     "Обновление каждые 5 секунд. " +
                         "Логин и пароль нужны, если API требует авторизацию."
                 )
+
+                    }
+                }
             }
-        }
-
-        Text(
-            text = ConnectionPolicy.label(
-                connected = connection != null,
-                hasData = status != null,
-                failed = error != null,
-                stale = staleStatus
-            ),
-            color = if (connection != null && (error != null || staleStatus))
-                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-        )
-        if (receivedAt.isNotEmpty()) Text("Последний успешный ответ: $receivedAt")
-        if (connection != null && pollFailures > 0) {
-            Text(if (loading) "Повторное чтение данных…" else
-                "Восстановление связи: пауза между чтениями ${nextPollMs / 1000} с. Команды записи не повторяются.")
-        }
-
-        ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 0.dp) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Настройки") })
-            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Архив") })
-        }
-        if (selectedTab == 3) {
-            ArchiveScreen(connection)
-        }
-        if (selectedTab == 2) {
-            key(connection) { CameraSettingsScreen(connection) }
-        }
-        if (selectedTab == 1) {
-            key(connection) { ProductsScreen(connection) }
-        }
-
-        if (loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        error?.let { message ->
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor =
-                        MaterialTheme.colorScheme.errorContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Ошибка обновления: $message",
-                    modifier = Modifier.padding(16.dp),
-                    color =
-                        MaterialTheme.colorScheme.onErrorContainer
-                )
+            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            error?.let { message ->
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth()) {
+                    Text("Ошибка обновления: $message", modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer)
+                }
             }
-        }
-
+            when (selectedTab) {
+                1 -> key(connection) { ProductsScreen(connection) }
+                2 -> key(connection) { CameraSettingsScreen(connection) }
+                3 -> ArchiveScreen(connection)
+            }
+            if (selectedTab == 0 && status == null) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DashboardIcon("camera", Modifier.size(40.dp), MaterialTheme.colorScheme.primary)
+                        Text(if (loading) "Получаем показания" else "Ваша камера — на одном экране",
+                            style = MaterialTheme.typography.titleLarge)
+                        Text("После подключения здесь появятся температура, влажность и состояние оборудования.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (!connectionExpanded) TextButton(onClick = { connectionExpanded = true }) { Text("Открыть подключение") }
+                    }
+                }
+            }
         if (selectedTab == 0) status?.let { data ->
             val age = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
             Text(
@@ -362,98 +352,73 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 }
             )
 
-            MetricCard(
-                title = "Температура",
-                value = "${number(data.temperature, 2)} °C",
-                target = "${number(data.targetTemperature, 1)} °C"
-            )
 
-            MetricCard(
-                title = "Влажность",
-                value = "${number(data.humidity, 2)} %",
-                target = "${number(data.targetHumidity, 1)} %"
-            )
-
-            MetricCard(
-                title = "Вентилятор",
-                value = "${number(data.rpm, 0)} об/мин",
-                target = "${number(data.targetRpm, 0)} об/мин"
-            )
-
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        "Состояние оборудования",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Автоматика: " +
-                            if (data.enabled) "включена" else "выключена"
-                    )
-
-                    Text(
-                        "Датчик: " + when {
-                            !data.sensorOk -> "ошибка"
-                            data.sensorDegraded -> "нестабильные данные"
-                            else -> "исправен"
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 480.dp && androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.3f) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            MetricCard("Температура", "${number(data.temperature, 2)} °C",
+                                "${number(data.targetTemperature, 1)} °C", "temperature", Modifier.weight(1f), staleStatus || connection == null)
+                            MetricCard("Влажность", "${number(data.humidity, 2)} %",
+                                "${number(data.targetHumidity, 1)} %", "humidity", Modifier.weight(1f), staleStatus || connection == null)
                         }
-                    )
-
-                    Text("Холодильник: ${onOff(data.fridge)}")
-                    Text("Увлажнитель: ${onOff(data.humidifier)}")
-                    Text("Вентилятор: ${onOff(data.fan)}")
-
-                    if (data.fridgeWait) {
-                        Text(
-                            "Ожидание компрессора: " +
-                                "${data.fridgeWaitSec} с"
-                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            MetricCard("Температура", "${number(data.temperature, 2)} °C",
+                                "${number(data.targetTemperature, 1)} °C", "temperature", stale = staleStatus || connection == null)
+                            MetricCard("Влажность", "${number(data.humidity, 2)} %",
+                                "${number(data.targetHumidity, 1)} %", "humidity", stale = staleStatus || connection == null)
+                        }
                     }
-
-                    if (data.fanFault) {
-                        Text(
-                            "АВАРИЯ ТАХОМЕТРА",
-                            color = MaterialTheme.colorScheme.error
-                        )
+                }
+                MetricCard("Вентилятор", "${number(data.rpm, 0)} об/мин",
+                    "${number(data.targetRpm, 0)} об/мин", "fan", stale = staleStatus || connection == null)
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Оборудование", style = MaterialTheme.typography.titleLarge)
+                        if (staleStatus || connection == null) Text("Последние известные состояния · не подтверждены сейчас",
+                            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        EquipmentRow("Автоматика", if (data.enabled) "Включена" else "Выключена", "settings", data.enabled)
+                        EquipmentRow("Датчик", when {
+                            !data.sensorOk -> "Ошибка"
+                            data.sensorDegraded -> "Нестабильные данные"
+                            else -> "Исправен"
+                        }, "temperature", data.sensorOk && !data.sensorDegraded, !data.sensorOk || data.sensorDegraded)
+                        HorizontalDivider()
+                        EquipmentRow("Холодильник", onOff(data.fridge), "cold", data.fridge)
+                        EquipmentRow("Увлажнитель", onOff(data.humidifier), "humidity", data.humidifier)
+                        EquipmentRow("Вентилятор", onOff(data.fan), "fan", data.fan)
+                        if (data.fridgeWait) Text("Ожидание компрессора: ${data.fridgeWaitSec} с",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (data.fanFault) Text("АВАРИЯ ТАХОМЕТРА", color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold)
                     }
-
-                    Text("Возраст данных датчика: ${data.sensorAgeSec} с")
-                    Text("Прошивка: ${data.version}")
-                    Text("Время ESP32: ${data.date} ${data.time}")
-
-                    val hours = data.uptimeSec / 3600
-                    val minutes = (data.uptimeSec % 3600) / 60
-                    Text("Работа после запуска: $hours ч $minutes мин")
+                }
+                var detailsExpanded by rememberSaveable { mutableStateOf(false) }
+                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick = { detailsExpanded = !detailsExpanded }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (detailsExpanded) "Скрыть сведения о камере" else "Сведения о камере")
+                        }
+                        if (detailsExpanded) {
+                            Text("Возраст данных датчика: ${data.sensorAgeSec} с")
+                            Text("Прошивка: ${data.version}")
+                            Text("Время ESP32: ${data.date} ${data.time}")
+                            Text("Работа после запуска: ${data.uptimeSec / 3600} ч ${(data.uptimeSec % 3600) / 60} мин")
+                        }
+                    }
                 }
             }
+            Spacer(Modifier.height(8.dp))
         }
-    }
-}
-
-@Composable
-private fun MetricCard(
-    title: String,
-    value: String,
-    target: String
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineLarge
-            )
-            Text("Уставка: $target")
+        NavigationBar(windowInsets = WindowInsets(0, 0, 0, 0)) {
+            listOf(0, 1, 3, 2).forEach { index ->
+                NavigationBarItem(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    icon = { DashboardIcon(when (index) { 0 -> "camera"; 1 -> "products"; 3 -> "archive"; else -> "settings" }) },
+                    label = { Text(sectionTitles[index], maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                )
+            }
         }
     }
 }

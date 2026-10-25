@@ -1,0 +1,14 @@
+[
+  {
+    "file": "app/src/main/java/com/example/climatecamera/ArchiveScreen.kt",
+    "line": 25,
+    "kind": "ERROR",
+    "text": "@Composable\ninternal fun ArchiveScreen(connection: ConnectionSettings?) {\n    val context = LocalContext.current\n    val"
+  },
+  {
+    "file": "app/src/main/java/com/example/climatecamera/ArchiveScreen.kt",
+    "line": 52,
+    "kind": "ERROR",
+    "text": "(e: Exception) { error = \"Не удалось прочитать архив: ${e.message}\" }\n            finally { busy = false }\n        }\n   "
+  }
+]

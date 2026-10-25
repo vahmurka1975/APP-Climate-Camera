@@ -1,24 +1,49 @@
 {
-  "versionName": "1.0.7",
-  "versionCode": 8,
-  "base": "Repository main downloaded in this reply, contained v1.0.6 / versionCode 7",
-  "jvmTests": {
-    "run": 52,
+  "versionName": "1.0.9",
+  "versionCode": 10,
+  "base_commit": "abcfd6638e5f71243bb91fd95a869632bbf04d7b",
+  "applicationId": "com.example.climatecamera",
+  "jvm_tests": {
+    "run": 64,
     "failed": 0,
-    "new": 15,
-    "method": "Kotlin 2.2.10 compiler + JUnitCore on Java 17; standalone domain models and policy classes, NOT Gradle"
+    "production_files": 7,
+    "test_files": 8,
+    "method": "Standalone Kotlin 2.2.10 compiler and JUnitCore; NOT an Android Gradle build"
   },
-  "kotlinSyntax": {
-    "files": 22,
+  "kotlin_syntax": {
+    "files": 27,
     "errors": 0,
-    "tool": "tree-sitter-kotlin"
+    "method": "Official Kotlin PSI parser; no Compose type checking"
   },
-  "xmlWellFormed": {
-    "files": 10,
-    "errors": 0
-  },
-  "androidBuild": "NOT RUN: Android SDK and full Android toolchain not configured for this change",
-  "apk": "NOT PROVIDED",
-  "deviceTests": "NOT RUN",
-  "repositoryModified": false
+  "xml_parsed": 11,
+  "changed_source_files": [
+    "app/build.gradle.kts",
+    "app/src/main/java/com/example/climatecamera/DashboardComponents.kt",
+    "app/src/main/java/com/example/climatecamera/MainActivity.kt",
+    "app/src/main/java/com/example/climatecamera/ui/theme/Color.kt",
+    "app/src/main/java/com/example/climatecamera/ui/theme/Theme.kt",
+    "app/src/main/java/com/example/climatecamera/ui/theme/Type.kt"
+  ],
+  "unchanged_logic_files": [
+    "ArchiveScreen.kt",
+    "CameraConfigModels.kt",
+    "CameraSettingsScreen.kt",
+    "CameraTransport.kt",
+    "ConnectionPolicy.kt",
+    "ConnectionStore.kt",
+    "FreshnessPolicy.kt",
+    "ProductArchive.kt",
+    "ProductArchiveStore.kt",
+    "ProductListPolicy.kt",
+    "ProductModels.kt",
+    "ProductsScreen.kt",
+    "ReadbackPolicy.kt"
+  ],
+  "android_gradle_build": "NOT RUN: Android SDK is not configured in this environment",
+  "android_lint": "NOT RUN",
+  "device_and_esp32_tests": "NOT RUN",
+  "apk": "NOT PROVIDED; old app/debug binary intentionally excluded",
+  "github_modified": false,
+  "esp32_firmware_modified": false,
+  "limits": "JVM tests and syntax parsing do not prove Android/Compose compilation, screen layout, navigation or runtime correctness."
 }

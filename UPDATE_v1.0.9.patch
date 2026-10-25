@@ -1,0 +1,1023 @@
+--- a/README.md
++++ b/README.md
+@@ -1,40 +1,45 @@
+-# ClimateCamera Android v1.0.8 — исходники
++# ClimateCamera Android v1.0.9 — исходники
+ 
+-База: APP-Climate-Camera, коммит `195764a99893a32477fc034d8bccb97a5ade8a2a`.
+-Версия: `1.0.8`, versionCode: `9`, applicationId: `com.example.climatecamera`.
+-Это исходный проект для Android Studio, не готовый APK. Прошивка ESP32 не изменена.
++Версия приложения: **1.0.9**, `versionCode = 10`, `applicationId = com.example.climatecamera`. База: коммит `abcfd6638e5f71243bb91fd95a869632bbf04d7b` репозитория APP-Climate-Camera.
+ 
+-## Что добавлено
++Это архив исходников для Android Studio, не готовый APK. Изменения не отправлены в GitHub. Прошивка ESP32 не изменена.
+ 
+-Вкладка «Архив» с локальным SQLite-хранилищем. Архив читается без подключения к камере. Для каждой копии сохраняются отдельный UUID, дата сохранения по телефону, отпечаток адреса камеры, начальный вес, цель усушки, дата закладки и доступные взвешивания. Можно просматривать историю, менять название и заметки, сохранять CSV через системный выбор файла и отправлять CSV через «Поделиться».
++## Что изменилось
+ 
+-Перед извлечением приложение повторно читает права, токен и продукт. Если данные изменились, требуется обновить список и подтвердить операцию заново. Сначала копия синхронно сохраняется в SQLite, и только затем отправляется один POST /api/products/remove. Если сохранить копию не удалось, POST не отправляется. Успешный ответ ESP32 фиксируется отдельно от последующего наблюдения пустого слота.
++- Бирюзовая светлая и тёмная темы; выбор по системной теме. Динамическая палитра Android по умолчанию отключена для единого оформления.
++- Обновлены типографика и скругления карточек. Общая тема применяется ко всем вкладкам, но отдельная переработка экранов продуктов, архива и настроек в этот этап не входит.
++- Нижняя навигация: «Камера», «Продукты», «Архив», «Настройки».
++- Форму подключения можно свернуть и раскрыть нажатием на карточку состояния.
++- Крупные показатели температуры и влажности; при достаточной ширине карточки располагаются рядом.
++- Отдельные блоки вентилятора, оборудования и раскрываемых технических сведений.
++- Сохранены предупреждения об устаревших данных и остановке обновления. Старые значения не должны восприниматься как текущие.
+ 
+-При потере ответа копия остаётся с неподтверждённым результатом. Автоматического повторения команды нет. Во вкладке «Архив» можно только прочитать текущее состояние слота: пуст, продукт совпадает или слот изменился. Это наблюдение, а не доказательство выполнения прежней команды. Проверка доступна при подключении к тому же адресу камеры. После наблюдения пользователь может вернуться к продуктам и отдельно подтвердить новую операцию, если это действительно необходимо.
++Сетевой транспорт, хранилище архива, операции с продуктами и их политики побайтно совпадают с базовой v1.0.8. Значок приложения сохранён из базы. Новые разрешения и зависимости не добавлены. Версии AGP, Gradle, Kotlin, Compose и SDK не менялись.
+ 
+-## Ограничения
++## Реально выполненные проверки
+ 
+-Архив создаётся только при извлечении через эту версию приложения. Извлечение через веб-интерфейс или другой телефон не архивируется. В архив попадают только записи, которые ESP32 ещё хранит: его предел 32 взвешивания не увеличен, ранее потерянные записи не восстанавливаются. Постоянной синхронизации активных продуктов и общего архива между телефонами нет.
++Выполнены Kotlin/JVM-компиляция семи платформонезависимых файлов и восьми файлов тестов, затем JUnit: **64 теста, 0 ошибок**. Официальным Kotlin-парсером проверены **27 Kotlin-файлов, синтаксических ошибок нет**. Разобраны **11 XML-файлов**. Сверены номер версии, неизменность логики и состав ZIP.
+ 
+-Локальная база находится в приватной папке приложения, но отдельного шифрования базы в этой версии нет. Удаление приложения или очистка данных удаляет архив. База исключена из штатного резервного копирования/переноса. CSV — экспорт для просмотра, импорт или восстановление базы из CSV не реализованы. В CSV входят ваши названия и заметки: не записывайте в них секреты. Адрес камеры представлен SHA-256-отпечатком; автоматически пароли и API-токены не экспортируются.
++Полная Android/Compose-сборка, Android Lint, инструментальные тесты и проверка на телефоне с ESP32 **не выполнены**: Android SDK здесь не настроен. Успешные JVM-тесты и синтаксический анализ не доказывают успешной Android-сборки. APK этого выпуска не создавался; старый `app/debug` исключён, чтобы не перепутать его с новым результатом. Логи находятся в `verification/v1.0.9`, отчёт — `VALIDATION_v1.0.9.json`. Старые отчёты и контрольные суммы относятся к прежним выпускам.
+ 
+-Разные адреса одного ESP32 считаются разными источниками. Прошивка не даёт уникальный идентификатор партии, поэтому после изменения или повторного использования слота приложение не может достоверно восстановить судьбу прежней партии. Повторная ручная попытка извлечения может создать ещё одну архивную копию; записи различаются UUID и статусом.
++## Как открыть и проверить
+ 
+-Архив пока не предназначен как единственное место хранения важных данных. Сохраняйте CSV вне приложения и не удаляйте рабочую установку без необходимости.
++1. Сохраните рабочую v1.0.8, локальные изменения и ключ подписи. Если архив продуктов важен, заранее экспортируйте CSV и сохраните его вне приложения. Не удаляйте приложение и не очищайте его данные.
++2. Распакуйте ZIP в отдельную папку и откройте её корень в Android Studio: рядом должны находиться `settings.gradle.kts`, `gradlew.bat` и папка `app`.
++3. Выполните Gradle Sync. Не понижайте версии инструментов и SDK вслепую.
++4. В терминале Android Studio на Windows выполните `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug`; в PowerShell также допустимо `.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug`. На Linux/macOS: `chmod +x gradlew` и `./gradlew :app:testDebugUnitTest :app:assembleDebug`.
++5. Только после успешной сборки используйте новый `app/build/outputs/apk/debug/app-debug.apk`. Для установки поверх существующей версии необходим тот же ключ подписи. Debug-ключ на другом компьютере может отличаться; если Android отклоняет обновление, не удаляйте рабочее приложение ради обхода ошибки.
++6. Пройдите сценарии из `docs/ACCEPTANCE_v1.0.9_RU.md`. Не проверяйте извлечение на важном продукте.
+ 
+-## Проверки именно этого выпуска
++## Как перенести в существующий репозиторий
+ 
+-Выполнена настоящая Kotlin/JVM-компиляция семи платформонезависимых файлов приложения и восьми файлов unit-тестов. JUnit: **64 теста успешно**. Проверен XML ресурсов и манифеста, номер версии, состав архива и контрольные суммы.
++1. Убедитесь, что рабочая Git-папка соответствует указанному базовому коммиту, либо отдельно сравните более новые изменения. Если репозиторий уже обновился, не копируйте файлы поверх него вслепую.
++2. Перенесите изменения из архива, сохранив вашу папку `.git`, `local.properties`, настройки среды и ключ подписи. ZIP не содержит Git-истории. Не переносите и не публикуйте локальные сборки.
++3. Альтернатива копированию — `UPDATE_v1.0.9.patch`. Сначала проверьте `git apply --check ПУТЬ_К_PATCH`, затем примените `git apply ПУТЬ_К_PATCH`. Используйте один способ, а не копирование и патч одновременно. Патч переносит текстовые изменения; старый отслеживаемый APK он намеренно не удаляет.
++4. Просмотрите diff, выполните локальную сборку и проверку приложения. После этого сделайте Commit and Push. Результат GitHub Actions необходимо проверить отдельно: здесь его запуск не подтверждён.
+ 
+-Полная Gradle-сборка Android/Compose, Android Lint, инструментальные тесты SQLite/FileProvider, проверка на телефоне и ESP32 **не выполнялись**: Android SDK в среде подготовки отсутствует. Успешные JVM-тесты не являются подтверждением успешной Android-сборки. APK не создавался. Логи: verification/v1.0.8; отчёт: VALIDATION_v1.0.8.json. Старые отчёты относятся к прежним версиям.
++## Ограничения, которые не изменились
+ 
+-## Установка исходников и проверка
++Архив хранится локально и не синхронизируется между телефонами. Предел истории ESP32 в 32 взвешивания не увеличен. Потерянные ранее записи не восстанавливаются. Удаление приложения или очистка данных удаляют локальный архив; CSV не является поддерживаемым импортом/восстановлением базы.
+ 
+-1. Сохраните рабочую v1.0.7, ключ подписи и текущие локальные изменения. Не удаляйте приложение на телефоне без необходимости.
+-2. Распакуйте ZIP в отдельную папку, откройте корень в Android Studio и выполните Gradle Sync. Версии AGP, Gradle, Compose и SDK сохранены из вашего репозитория; не понижайте их вслепую.
+-3. Выполните `gradlew.bat :app:testDebugUnitTest :app:assembleDebug` (Windows) либо `./gradlew :app:testDebugUnitTest :app:assembleDebug` (Linux/macOS).
+-4. Устанавливайте обновление с тем же applicationId и тем же ключом подписи. Если сборка останавливается, сохраните полный текст ошибки; не заменяйте рабочий APK непроверенной сборкой.
+-5. Пройдите сценарии из docs/ACCEPTANCE_v1.0.8_RU.md на тестовом продукте.
+-6. После проверки переносите изменения в свою клонированную Git-папку. Не копируйте поверх неё папку .git, local.properties, .idea или build. Просмотрите diff, затем Commit и Push. Существующий GitHub Actions после Push может выполнить Android-сборку в вашем репозитории; здесь его результат не проверялся.
+-
+-UPDATE_v1.0.8.patch — альтернативный способ переноса относительно указанной базы. Не применяйте его поверх уже скопированных изменений. SHA256SUMS_v1.0.8.txt содержит контрольные суммы файлов выпуска.
++`SHA256SUMS_v1.0.9.txt` содержит контрольные суммы файлов архива, кроме самих двух файлов текущих контрольных сумм. `UPDATE_v1.0.9.patch` подготовлен относительно указанной базы.
+--- /dev/null
++++ b/RELEASE_v1.0.9_RU.md
+@@ -0,0 +1,45 @@
++# Выпуск v1.0.9 — обновление главного экрана
++
++Версия приложения: **1.0.9**, `versionCode = 10`, `applicationId = com.example.climatecamera`. База: коммит `abcfd6638e5f71243bb91fd95a869632bbf04d7b` репозитория APP-Climate-Camera.
++
++Это архив исходников для Android Studio, не готовый APK. Изменения не отправлены в GitHub. Прошивка ESP32 не изменена.
++
++## Что изменилось
++
++- Бирюзовая светлая и тёмная темы; выбор по системной теме. Динамическая палитра Android по умолчанию отключена для единого оформления.
++- Обновлены типографика и скругления карточек. Общая тема применяется ко всем вкладкам, но отдельная переработка экранов продуктов, архива и настроек в этот этап не входит.
++- Нижняя навигация: «Камера», «Продукты», «Архив», «Настройки».
++- Форму подключения можно свернуть и раскрыть нажатием на карточку состояния.
++- Крупные показатели температуры и влажности; при достаточной ширине карточки располагаются рядом.
++- Отдельные блоки вентилятора, оборудования и раскрываемых технических сведений.
++- Сохранены предупреждения об устаревших данных и остановке обновления. Старые значения не должны восприниматься как текущие.
++
++Сетевой транспорт, хранилище архива, операции с продуктами и их политики побайтно совпадают с базовой v1.0.8. Значок приложения сохранён из базы. Новые разрешения и зависимости не добавлены. Версии AGP, Gradle, Kotlin, Compose и SDK не менялись.
++
++## Реально выполненные проверки
++
++Выполнены Kotlin/JVM-компиляция семи платформонезависимых файлов и восьми файлов тестов, затем JUnit: **64 теста, 0 ошибок**. Официальным Kotlin-парсером проверены **27 Kotlin-файлов, синтаксических ошибок нет**. Разобраны **11 XML-файлов**. Сверены номер версии, неизменность логики и состав ZIP.
++
++Полная Android/Compose-сборка, Android Lint, инструментальные тесты и проверка на телефоне с ESP32 **не выполнены**: Android SDK здесь не настроен. Успешные JVM-тесты и синтаксический анализ не доказывают успешной Android-сборки. APK этого выпуска не создавался; старый `app/debug` исключён, чтобы не перепутать его с новым результатом. Логи находятся в `verification/v1.0.9`, отчёт — `VALIDATION_v1.0.9.json`. Старые отчёты и контрольные суммы относятся к прежним выпускам.
++
++## Как открыть и проверить
++
++1. Сохраните рабочую v1.0.8, локальные изменения и ключ подписи. Если архив продуктов важен, заранее экспортируйте CSV и сохраните его вне приложения. Не удаляйте приложение и не очищайте его данные.
++2. Распакуйте ZIP в отдельную папку и откройте её корень в Android Studio: рядом должны находиться `settings.gradle.kts`, `gradlew.bat` и папка `app`.
++3. Выполните Gradle Sync. Не понижайте версии инструментов и SDK вслепую.
++4. В терминале Android Studio на Windows выполните `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug`; в PowerShell также допустимо `.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug`. На Linux/macOS: `chmod +x gradlew` и `./gradlew :app:testDebugUnitTest :app:assembleDebug`.
++5. Только после успешной сборки используйте новый `app/build/outputs/apk/debug/app-debug.apk`. Для установки поверх существующей версии необходим тот же ключ подписи. Debug-ключ на другом компьютере может отличаться; если Android отклоняет обновление, не удаляйте рабочее приложение ради обхода ошибки.
++6. Пройдите сценарии из `docs/ACCEPTANCE_v1.0.9_RU.md`. Не проверяйте извлечение на важном продукте.
++
++## Как перенести в существующий репозиторий
++
++1. Убедитесь, что рабочая Git-папка соответствует указанному базовому коммиту, либо отдельно сравните более новые изменения. Если репозиторий уже обновился, не копируйте файлы поверх него вслепую.
++2. Перенесите изменения из архива, сохранив вашу папку `.git`, `local.properties`, настройки среды и ключ подписи. ZIP не содержит Git-истории. Не переносите и не публикуйте локальные сборки.
++3. Альтернатива копированию — `UPDATE_v1.0.9.patch`. Сначала проверьте `git apply --check ПУТЬ_К_PATCH`, затем примените `git apply ПУТЬ_К_PATCH`. Используйте один способ, а не копирование и патч одновременно. Патч переносит текстовые изменения; старый отслеживаемый APK он намеренно не удаляет.
++4. Просмотрите diff, выполните локальную сборку и проверку приложения. После этого сделайте Commit and Push. Результат GitHub Actions необходимо проверить отдельно: здесь его запуск не подтверждён.
++
++## Ограничения, которые не изменились
++
++Архив хранится локально и не синхронизируется между телефонами. Предел истории ESP32 в 32 взвешивания не увеличен. Потерянные ранее записи не восстанавливаются. Удаление приложения или очистка данных удаляют локальный архив; CSV не является поддерживаемым импортом/восстановлением базы.
++
++`SHA256SUMS_v1.0.9.txt` содержит контрольные суммы файлов архива, кроме самих двух файлов текущих контрольных сумм. `UPDATE_v1.0.9.patch` подготовлен относительно указанной базы.
+--- a/VALIDATION.json
++++ b/VALIDATION.json
+@@ -1,24 +1,49 @@
+ {
+-  "versionName": "1.0.7",
+-  "versionCode": 8,
+-  "base": "Repository main downloaded in this reply, contained v1.0.6 / versionCode 7",
+-  "jvmTests": {
+-    "run": 52,
++  "versionName": "1.0.9",
++  "versionCode": 10,
++  "base_commit": "abcfd6638e5f71243bb91fd95a869632bbf04d7b",
++  "applicationId": "com.example.climatecamera",
++  "jvm_tests": {
++    "run": 64,
+     "failed": 0,
+-    "new": 15,
+-    "method": "Kotlin 2.2.10 compiler + JUnitCore on Java 17; standalone domain models and policy classes, NOT Gradle"
++    "production_files": 7,
++    "test_files": 8,
++    "method": "Standalone Kotlin 2.2.10 compiler and JUnitCore; NOT an Android Gradle build"
+   },
+-  "kotlinSyntax": {
+-    "files": 22,
++  "kotlin_syntax": {
++    "files": 27,
+     "errors": 0,
+-    "tool": "tree-sitter-kotlin"
++    "method": "Official Kotlin PSI parser; no Compose type checking"
+   },
+-  "xmlWellFormed": {
+-    "files": 10,
+-    "errors": 0
+-  },
+-  "androidBuild": "NOT RUN: Android SDK and full Android toolchain not configured for this change",
+-  "apk": "NOT PROVIDED",
+-  "deviceTests": "NOT RUN",
+-  "repositoryModified": false
++  "xml_parsed": 11,
++  "changed_source_files": [
++    "app/build.gradle.kts",
++    "app/src/main/java/com/example/climatecamera/DashboardComponents.kt",
++    "app/src/main/java/com/example/climatecamera/MainActivity.kt",
++    "app/src/main/java/com/example/climatecamera/ui/theme/Color.kt",
++    "app/src/main/java/com/example/climatecamera/ui/theme/Theme.kt",
++    "app/src/main/java/com/example/climatecamera/ui/theme/Type.kt"
++  ],
++  "unchanged_logic_files": [
++    "ArchiveScreen.kt",
++    "CameraConfigModels.kt",
++    "CameraSettingsScreen.kt",
++    "CameraTransport.kt",
++    "ConnectionPolicy.kt",
++    "ConnectionStore.kt",
++    "FreshnessPolicy.kt",
++    "ProductArchive.kt",
++    "ProductArchiveStore.kt",
++    "ProductListPolicy.kt",
++    "ProductModels.kt",
++    "ProductsScreen.kt",
++    "ReadbackPolicy.kt"
++  ],
++  "android_gradle_build": "NOT RUN: Android SDK is not configured in this environment",
++  "android_lint": "NOT RUN",
++  "device_and_esp32_tests": "NOT RUN",
++  "apk": "NOT PROVIDED; old app/debug binary intentionally excluded",
++  "github_modified": false,
++  "esp32_firmware_modified": false,
++  "limits": "JVM tests and syntax parsing do not prove Android/Compose compilation, screen layout, navigation or runtime correctness."
+ }
+--- /dev/null
++++ b/VALIDATION_v1.0.9.json
+@@ -0,0 +1,49 @@
++{
++  "versionName": "1.0.9",
++  "versionCode": 10,
++  "base_commit": "abcfd6638e5f71243bb91fd95a869632bbf04d7b",
++  "applicationId": "com.example.climatecamera",
++  "jvm_tests": {
++    "run": 64,
++    "failed": 0,
++    "production_files": 7,
++    "test_files": 8,
++    "method": "Standalone Kotlin 2.2.10 compiler and JUnitCore; NOT an Android Gradle build"
++  },
++  "kotlin_syntax": {
++    "files": 27,
++    "errors": 0,
++    "method": "Official Kotlin PSI parser; no Compose type checking"
++  },
++  "xml_parsed": 11,
++  "changed_source_files": [
++    "app/build.gradle.kts",
++    "app/src/main/java/com/example/climatecamera/DashboardComponents.kt",
++    "app/src/main/java/com/example/climatecamera/MainActivity.kt",
++    "app/src/main/java/com/example/climatecamera/ui/theme/Color.kt",
++    "app/src/main/java/com/example/climatecamera/ui/theme/Theme.kt",
++    "app/src/main/java/com/example/climatecamera/ui/theme/Type.kt"
++  ],
++  "unchanged_logic_files": [
++    "ArchiveScreen.kt",
++    "CameraConfigModels.kt",
++    "CameraSettingsScreen.kt",
++    "CameraTransport.kt",
++    "ConnectionPolicy.kt",
++    "ConnectionStore.kt",
++    "FreshnessPolicy.kt",
++    "ProductArchive.kt",
++    "ProductArchiveStore.kt",
++    "ProductListPolicy.kt",
++    "ProductModels.kt",
++    "ProductsScreen.kt",
++    "ReadbackPolicy.kt"
++  ],
++  "android_gradle_build": "NOT RUN: Android SDK is not configured in this environment",
++  "android_lint": "NOT RUN",
++  "device_and_esp32_tests": "NOT RUN",
++  "apk": "NOT PROVIDED; old app/debug binary intentionally excluded",
++  "github_modified": false,
++  "esp32_firmware_modified": false,
++  "limits": "JVM tests and syntax parsing do not prove Android/Compose compilation, screen layout, navigation or runtime correctness."
++}
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 9
+-        versionName = "1.0.8"
++        versionCode = 10
++        versionName = "1.0.9"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/DashboardComponents.kt
+@@ -0,0 +1,140 @@
++package com.example.climatecamera
++
++import androidx.compose.foundation.Canvas
++import androidx.compose.foundation.background
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.shape.CircleShape
++import androidx.compose.material3.*
++import androidx.compose.runtime.Composable
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.geometry.Offset
++import androidx.compose.ui.geometry.Size
++import androidx.compose.ui.graphics.Color
++import androidx.compose.ui.graphics.Path
++import androidx.compose.ui.graphics.StrokeCap
++import androidx.compose.ui.graphics.drawscope.Stroke
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.unit.dp
++
++/** Locally drawn icons: no extra dependency, asset download or icon font. */
++@Composable
++internal fun DashboardIcon(kind: String, modifier: Modifier = Modifier.size(24.dp),
++    tint: Color = MaterialTheme.colorScheme.onSurface) {
++    Canvas(modifier) {
++        val scale = size.minDimension / 24f
++        fun point(x: Float, y: Float) = Offset(x * scale, y * scale)
++        val stroke = Stroke(1.7f * scale, cap = StrokeCap.Round)
++        fun line(x: Float, y: Float, xx: Float, yy: Float) =
++            drawLine(tint, point(x, y), point(xx, yy), strokeWidth = 1.7f * scale, cap = StrokeCap.Round)
++        when (kind) {
++            "temperature" -> {
++                drawRoundRect(tint, point(9f, 2f), Size(6f * scale, 14f * scale),
++                    androidx.compose.ui.geometry.CornerRadius(3f * scale), style = stroke)
++                drawCircle(tint, 4.5f * scale, point(12f, 17f), style = stroke)
++                line(12f, 7f, 12f, 17f)
++                drawCircle(tint, 2f * scale, point(12f, 17f))
++            }
++            "humidity" -> {
++                val path = Path().apply {
++                    moveTo(12f * scale, 2f * scale)
++                    cubicTo(9f * scale, 7f * scale, 5f * scale, 11f * scale, 5f * scale, 15f * scale)
++                    cubicTo(5f * scale, 24f * scale, 19f * scale, 24f * scale, 19f * scale, 15f * scale)
++                    cubicTo(19f * scale, 11f * scale, 15f * scale, 7f * scale, 12f * scale, 2f * scale)
++                    close()
++                }
++                drawPath(path, tint, style = stroke)
++                line(8f, 15f, 8f, 17f)
++            }
++            "fan" -> {
++                drawCircle(tint, 2.5f * scale, point(12f, 12f), style = stroke)
++                listOf(Offset(12f, 5.5f), Offset(18f, 15.5f), Offset(6f, 15.5f)).forEach {
++                    drawCircle(tint, 3.2f * scale, point(it.x, it.y), style = stroke)
++                }
++            }
++            "cold" -> {
++                line(12f, 2f, 12f, 22f); line(3.3f, 7f, 20.7f, 17f); line(3.3f, 17f, 20.7f, 7f)
++                line(9f, 4f, 12f, 7f); line(15f, 4f, 12f, 7f)
++                line(9f, 20f, 12f, 17f); line(15f, 20f, 12f, 17f)
++            }
++            "products" -> {
++                drawRoundRect(tint, point(4f, 7f), Size(16f * scale, 14f * scale),
++                    androidx.compose.ui.geometry.CornerRadius(2f * scale), style = stroke)
++                line(8f, 7f, 8f, 3f); line(8f, 3f, 16f, 3f); line(16f, 3f, 16f, 7f)
++                line(4f, 12f, 20f, 12f)
++            }
++            "archive" -> {
++                drawRect(tint, point(4f, 8f), Size(16f * scale, 13f * scale), style = stroke)
++                drawRect(tint, point(3f, 3f), Size(18f * scale, 5f * scale), style = stroke)
++                line(9f, 12f, 15f, 12f)
++            }
++            "settings" -> {
++                listOf(6f to 8f, 12f to 16f, 18f to 10f).forEach { (x, y) ->
++                    line(x, 3f, x, y - 2.5f); line(x, y + 2.5f, x, 21f)
++                    drawCircle(tint, 2.5f * scale, point(x, y), style = stroke)
++                }
++            }
++            else -> {
++                drawRoundRect(tint, point(4f, 2f), Size(16f * scale, 20f * scale),
++                    androidx.compose.ui.geometry.CornerRadius(3f * scale), style = stroke)
++                line(4f, 10f, 20f, 10f); line(16f, 5f, 16f, 7f); line(16f, 13f, 16f, 16f)
++            }
++        }
++    }
++}
++
++@Composable
++internal fun ConnectionBanner(label: String, detail: String, warning: Boolean,
++    active: Boolean, onClick: () -> Unit, expanded: Boolean) {
++    val colors = MaterialTheme.colorScheme
++    val accent = when { warning -> colors.error; active -> colors.primary; else -> colors.onSurfaceVariant }
++    Card(onClick = onClick, modifier = Modifier.fillMaxWidth(),
++        colors = CardDefaults.cardColors(containerColor = if (warning) colors.errorContainer else colors.surfaceVariant)) {
++        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
++            verticalAlignment = Alignment.CenterVertically) {
++            Box(Modifier.size(10.dp).background(accent, CircleShape))
++            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
++                Text(label, style = MaterialTheme.typography.titleSmall,
++                    color = if (warning) colors.onErrorContainer else colors.onSurface)
++                Text(detail, style = MaterialTheme.typography.bodySmall,
++                    color = if (warning) colors.onErrorContainer else colors.onSurfaceVariant)
++                Text(if (expanded) "Скрыть подключение" else "Показать подключение",
++                    style = MaterialTheme.typography.labelMedium,
++                    color = if (warning) colors.onErrorContainer else colors.primary)
++            }
++        }
++    }
++}
++
++@Composable
++internal fun MetricCard(title: String, value: String, target: String, icon: String,
++    modifier: Modifier = Modifier, stale: Boolean = false) {
++    Card(modifier = modifier.fillMaxWidth(),
++        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
++        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
++            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
++                DashboardIcon(icon, tint = MaterialTheme.colorScheme.primary)
++                Text(title, style = MaterialTheme.typography.titleMedium)
++            }
++            Text(value, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
++            Text("Уставка: $target", style = MaterialTheme.typography.bodyMedium,
++                color = MaterialTheme.colorScheme.onSurfaceVariant)
++            if (stale) Text("Последнее известное значение", style = MaterialTheme.typography.labelMedium,
++                color = MaterialTheme.colorScheme.error)
++        }
++    }
++}
++
++@Composable
++internal fun EquipmentRow(title: String, value: String, icon: String, active: Boolean, fault: Boolean = false) {
++    val colors = MaterialTheme.colorScheme
++    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
++        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
++        DashboardIcon(icon, tint = if (fault) colors.error else colors.onSurfaceVariant)
++        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
++            Text(title, style = MaterialTheme.typography.bodyMedium)
++            Text(value, style = MaterialTheme.typography.labelLarge,
++                color = when { fault -> colors.error; active -> colors.primary; else -> colors.onSurfaceVariant })
++        }
++    }
++}
+--- a/app/src/main/java/com/example/climatecamera/MainActivity.kt
++++ b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+@@ -8,6 +8,11 @@
+ import androidx.activity.compose.setContent
+ import androidx.activity.enableEdgeToEdge
+ import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.background
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.ui.Alignment
++import androidx.compose.ui.text.font.FontWeight
++import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.foundation.rememberScrollState
+ import androidx.compose.foundation.text.KeyboardOptions
+ import androidx.compose.foundation.verticalScroll
+@@ -110,6 +115,7 @@
+         receivedElapsed, elapsedNow, FreshnessPolicy.STATUS_MAX_AGE_MS
+     )
+     var selectedTab by rememberSaveable { mutableStateOf(0) }
++    var connectionExpanded by rememberSaveable { mutableStateOf(true) }
+     val context = LocalContext.current
+     val store = remember(context) { ConnectionStore(context) }
+     var rememberPassword by remember { mutableStateOf(false) }
+@@ -171,33 +177,46 @@
+         }
+     }
+ 
+-    Column(
+-        modifier = modifier
+-            .fillMaxSize()
+-            .verticalScroll(rememberScrollState())
+-            .padding(16.dp),
+-        verticalArrangement = Arrangement.spacedBy(12.dp)
+-    ) {
+-        Text(
+-            text = "Климатическая камера",
+-            style = MaterialTheme.typography.headlineSmall
+-        )
+-
+-        Text(
+-            text = "ESP32 · приложение v${BuildConfig.VERSION_NAME}",
+-            style = MaterialTheme.typography.bodyMedium
+-        )
+-
+-        Card(modifier = Modifier.fillMaxWidth()) {
+-            Column(
+-                modifier = Modifier.padding(16.dp),
+-                verticalArrangement = Arrangement.spacedBy(10.dp)
+-            ) {
+-                Text(
+-                    text = "Подключение",
+-                    style = MaterialTheme.typography.titleMedium
+-                )
+-
++    LaunchedEffect(connection, status != null) {
++        if (connection != null && status != null) connectionExpanded = false
++    }
++    val sectionTitles = listOf("Камера", "Продукты", "Настройки", "Архив")
++    val scrollState = key(selectedTab) { rememberScrollState() }
++    Column(modifier = modifier.fillMaxSize()) {
++        Column(
++            modifier = Modifier.weight(1f).fillMaxWidth()
++                .verticalScroll(scrollState).padding(horizontal = 20.dp, vertical = 16.dp),
++            verticalArrangement = Arrangement.spacedBy(16.dp)
++        ) {
++            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
++                Column(modifier = Modifier.weight(1f)) {
++                    Text("CLIMATE CAMERA", style = MaterialTheme.typography.labelMedium,
++                        color = MaterialTheme.colorScheme.primary)
++                    Text(sectionTitles[selectedTab], style = MaterialTheme.typography.headlineMedium,
++                        fontWeight = FontWeight.Bold)
++                }
++                Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
++                    color = MaterialTheme.colorScheme.onSurfaceVariant)
++            }
++            ConnectionBanner(
++                label = ConnectionPolicy.label(connection != null, status != null, error != null, staleStatus),
++                detail = when {
++                    connection == null && status != null -> "Обновление остановлено · показаны последние данные"
++                    connection == null -> "Укажите адрес камеры и подключитесь"
++                    loading && pollFailures > 0 -> "Повторное чтение данных…"
++                    pollFailures > 0 -> "Повторное чтение через интервал ${nextPollMs / 1000} с"
++                    receivedAt.isNotEmpty() -> "Последний ответ: $receivedAt"
++                    else -> "Ожидание первого ответа ESP32"
++                },
++                warning = connection != null && (error != null || staleStatus),
++                active = connection != null && status != null && error == null && !staleStatus,
++                onClick = { connectionExpanded = !connectionExpanded },
++                expanded = connectionExpanded
++            )
++            if (connectionExpanded) {
++                Card(modifier = Modifier.fillMaxWidth()) {
++                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
++                        Text("Подключение к камере", style = MaterialTheme.typography.titleLarge)
+                 OutlinedTextField(
+                     value = address,
+                     onValueChange = { address = it },
+@@ -286,64 +305,35 @@
+                     "Обновление каждые 5 секунд. " +
+                         "Логин и пароль нужны, если API требует авторизацию."
+                 )
+-            }
+-        }
+-
+-        Text(
+-            text = ConnectionPolicy.label(
+-                connected = connection != null,
+-                hasData = status != null,
+-                failed = error != null,
+-                stale = staleStatus
+-            ),
+-            color = if (connection != null && (error != null || staleStatus))
+-                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+-        )
+-        if (receivedAt.isNotEmpty()) Text("Последний успешный ответ: $receivedAt")
+-        if (connection != null && pollFailures > 0) {
+-            Text(if (loading) "Повторное чтение данных…" else
+-                "Восстановление связи: пауза между чтениями ${nextPollMs / 1000} с. Команды записи не повторяются.")
+-        }
+-
+-        ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 0.dp) {
+-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
+-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
+-            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Настройки") })
+-            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Архив") })
+-        }
+-        if (selectedTab == 3) {
+-            ArchiveScreen(connection)
+-        }
+-        if (selectedTab == 2) {
+-            key(connection) { CameraSettingsScreen(connection) }
+-        }
+-        if (selectedTab == 1) {
+-            key(connection) { ProductsScreen(connection) }
+-        }
+-
+-        if (loading) {
+-            LinearProgressIndicator(
+-                modifier = Modifier.fillMaxWidth()
+-            )
+-        }
+-
+-        error?.let { message ->
+-            Card(
+-                colors = CardDefaults.cardColors(
+-                    containerColor =
+-                        MaterialTheme.colorScheme.errorContainer
+-                ),
+-                modifier = Modifier.fillMaxWidth()
+-            ) {
+-                Text(
+-                    text = "Ошибка обновления: $message",
+-                    modifier = Modifier.padding(16.dp),
+-                    color =
+-                        MaterialTheme.colorScheme.onErrorContainer
+-                )
+-            }
+-        }
+-
++
++                    }
++                }
++            }
++            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
++            error?.let { message ->
++                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
++                    modifier = Modifier.fillMaxWidth()) {
++                    Text("Ошибка обновления: $message", modifier = Modifier.padding(16.dp),
++                        color = MaterialTheme.colorScheme.onErrorContainer)
++                }
++            }
++            when (selectedTab) {
++                1 -> key(connection) { ProductsScreen(connection) }
++                2 -> key(connection) { CameraSettingsScreen(connection) }
++                3 -> ArchiveScreen(connection)
++            }
++            if (selectedTab == 0 && status == null) {
++                Card(modifier = Modifier.fillMaxWidth()) {
++                    Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
++                        DashboardIcon("camera", Modifier.size(40.dp), MaterialTheme.colorScheme.primary)
++                        Text(if (loading) "Получаем показания" else "Ваша камера — на одном экране",
++                            style = MaterialTheme.typography.titleLarge)
++                        Text("После подключения здесь появятся температура, влажность и состояние оборудования.",
++                            color = MaterialTheme.colorScheme.onSurfaceVariant)
++                        if (!connectionExpanded) TextButton(onClick = { connectionExpanded = true }) { Text("Открыть подключение") }
++                    }
++                }
++            }
+         if (selectedTab == 0) status?.let { data ->
+             val age = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
+             Text(
+@@ -362,98 +352,73 @@
+                 }
+             )
+ 
+-            MetricCard(
+-                title = "Температура",
+-                value = "${number(data.temperature, 2)} °C",
+-                target = "${number(data.targetTemperature, 1)} °C"
+-            )
+-
+-            MetricCard(
+-                title = "Влажность",
+-                value = "${number(data.humidity, 2)} %",
+-                target = "${number(data.targetHumidity, 1)} %"
+-            )
+-
+-            MetricCard(
+-                title = "Вентилятор",
+-                value = "${number(data.rpm, 0)} об/мин",
+-                target = "${number(data.targetRpm, 0)} об/мин"
+-            )
+-
+-            Card(modifier = Modifier.fillMaxWidth()) {
+-                Column(
+-                    modifier = Modifier.padding(16.dp),
+-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+-                ) {
+-                    Text(
+-                        "Состояние оборудования",
+-                        style = MaterialTheme.typography.titleMedium
+-                    )
+-
+-                    Text(
+-                        "Автоматика: " +
+-                            if (data.enabled) "включена" else "выключена"
+-                    )
+-
+-                    Text(
+-                        "Датчик: " + when {
+-                            !data.sensorOk -> "ошибка"
+-                            data.sensorDegraded -> "нестабильные данные"
+-                            else -> "исправен"
+-                        }
+-                    )
+-
+-                    Text("Холодильник: ${onOff(data.fridge)}")
+-                    Text("Увлажнитель: ${onOff(data.humidifier)}")
+-                    Text("Вентилятор: ${onOff(data.fan)}")
+-
+-                    if (data.fridgeWait) {
+-                        Text(
+-                            "Ожидание компрессора: " +
+-                                "${data.fridgeWaitSec} с"
+-                        )
+-                    }
+-
+-                    if (data.fanFault) {
+-                        Text(
+-                            "АВАРИЯ ТАХОМЕТРА",
+-                            color = MaterialTheme.colorScheme.error
+-                        )
+-                    }
+-
+-                    Text("Возраст данных датчика: ${data.sensorAgeSec} с")
+-                    Text("Прошивка: ${data.version}")
+-                    Text("Время ESP32: ${data.date} ${data.time}")
+-
+-                    val hours = data.uptimeSec / 3600
+-                    val minutes = (data.uptimeSec % 3600) / 60
+-                    Text("Работа после запуска: $hours ч $minutes мин")
+-                }
+-            }
+-        }
+-    }
+-}
+-
+-@Composable
+-private fun MetricCard(
+-    title: String,
+-    value: String,
+-    target: String
+-) {
+-    Card(modifier = Modifier.fillMaxWidth()) {
+-        Column(
+-            modifier = Modifier.padding(16.dp),
+-            verticalArrangement = Arrangement.spacedBy(4.dp)
+-        ) {
+-            Text(
+-                text = title,
+-                style = MaterialTheme.typography.titleMedium
+-            )
+-            Text(
+-                text = value,
+-                style = MaterialTheme.typography.headlineLarge
+-            )
+-            Text("Уставка: $target")
++
++                BoxWithConstraints(Modifier.fillMaxWidth()) {
++                    if (maxWidth >= 480.dp && androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.3f) {
++                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
++                            MetricCard("Температура", "${number(data.temperature, 2)} °C",
++                                "${number(data.targetTemperature, 1)} °C", "temperature", Modifier.weight(1f), staleStatus || connection == null)
++                            MetricCard("Влажность", "${number(data.humidity, 2)} %",
++                                "${number(data.targetHumidity, 1)} %", "humidity", Modifier.weight(1f), staleStatus || connection == null)
++                        }
++                    } else {
++                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
++                            MetricCard("Температура", "${number(data.temperature, 2)} °C",
++                                "${number(data.targetTemperature, 1)} °C", "temperature", stale = staleStatus || connection == null)
++                            MetricCard("Влажность", "${number(data.humidity, 2)} %",
++                                "${number(data.targetHumidity, 1)} %", "humidity", stale = staleStatus || connection == null)
++                        }
++                    }
++                }
++                MetricCard("Вентилятор", "${number(data.rpm, 0)} об/мин",
++                    "${number(data.targetRpm, 0)} об/мин", "fan", stale = staleStatus || connection == null)
++                Card(modifier = Modifier.fillMaxWidth()) {
++                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
++                        Text("Оборудование", style = MaterialTheme.typography.titleLarge)
++                        if (staleStatus || connection == null) Text("Последние известные состояния · не подтверждены сейчас",
++                            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
++                        EquipmentRow("Автоматика", if (data.enabled) "Включена" else "Выключена", "settings", data.enabled)
++                        EquipmentRow("Датчик", when {
++                            !data.sensorOk -> "Ошибка"
++                            data.sensorDegraded -> "Нестабильные данные"
++                            else -> "Исправен"
++                        }, "temperature", data.sensorOk && !data.sensorDegraded, !data.sensorOk || data.sensorDegraded)
++                        HorizontalDivider()
++                        EquipmentRow("Холодильник", onOff(data.fridge), "cold", data.fridge)
++                        EquipmentRow("Увлажнитель", onOff(data.humidifier), "humidity", data.humidifier)
++                        EquipmentRow("Вентилятор", onOff(data.fan), "fan", data.fan)
++                        if (data.fridgeWait) Text("Ожидание компрессора: ${data.fridgeWaitSec} с",
++                            color = MaterialTheme.colorScheme.onSurfaceVariant)
++                        if (data.fanFault) Text("АВАРИЯ ТАХОМЕТРА", color = MaterialTheme.colorScheme.error,
++                            fontWeight = FontWeight.Bold)
++                    }
++                }
++                var detailsExpanded by rememberSaveable { mutableStateOf(false) }
++                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
++                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
++                        TextButton(onClick = { detailsExpanded = !detailsExpanded }, modifier = Modifier.fillMaxWidth()) {
++                            Text(if (detailsExpanded) "Скрыть сведения о камере" else "Сведения о камере")
++                        }
++                        if (detailsExpanded) {
++                            Text("Возраст данных датчика: ${data.sensorAgeSec} с")
++                            Text("Прошивка: ${data.version}")
++                            Text("Время ESP32: ${data.date} ${data.time}")
++                            Text("Работа после запуска: ${data.uptimeSec / 3600} ч ${(data.uptimeSec % 3600) / 60} мин")
++                        }
++                    }
++                }
++            }
++            Spacer(Modifier.height(8.dp))
++        }
++        NavigationBar(windowInsets = WindowInsets(0, 0, 0, 0)) {
++            listOf(0, 1, 3, 2).forEach { index ->
++                NavigationBarItem(
++                    selected = selectedTab == index,
++                    onClick = { selectedTab = index },
++                    icon = { DashboardIcon(when (index) { 0 -> "camera"; 1 -> "products"; 3 -> "archive"; else -> "settings" }) },
++                    label = { Text(sectionTitles[index], maxLines = 1, overflow = TextOverflow.Ellipsis) }
++                )
++            }
+         }
+     }
+ }
+--- a/app/src/main/java/com/example/climatecamera/ui/theme/Color.kt
++++ b/app/src/main/java/com/example/climatecamera/ui/theme/Color.kt
+@@ -1,11 +1,3 @@
+ package com.example.climatecamera.ui.theme
+ 
+-import androidx.compose.ui.graphics.Color
+-
+-val Purple80 = Color(0xFFD0BCFF)
+-val PurpleGrey80 = Color(0xFFCCC2DC)
+-val Pink80 = Color(0xFFEFB8C8)
+-
+-val Purple40 = Color(0xFF6650a4)
+-val PurpleGrey40 = Color(0xFF625b71)
+-val Pink40 = Color(0xFF7D5260)
+\ No newline at end of file
++// The semantic light/dark palettes are defined together in Theme.kt.
+--- a/app/src/main/java/com/example/climatecamera/ui/theme/Theme.kt
++++ b/app/src/main/java/com/example/climatecamera/ui/theme/Theme.kt
+@@ -1,58 +1,55 @@
+ package com.example.climatecamera.ui.theme
+ 
+-import android.app.Activity
+ import android.os.Build
+ import androidx.compose.foundation.isSystemInDarkTheme
+-import androidx.compose.material3.MaterialTheme
+-import androidx.compose.material3.darkColorScheme
+-import androidx.compose.material3.dynamicDarkColorScheme
+-import androidx.compose.material3.dynamicLightColorScheme
+-import androidx.compose.material3.lightColorScheme
++import androidx.compose.foundation.shape.RoundedCornerShape
++import androidx.compose.material3.*
+ import androidx.compose.runtime.Composable
++import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.unit.dp
+ 
+-private val DarkColorScheme = darkColorScheme(
+-    primary = Purple80,
+-    secondary = PurpleGrey80,
+-    tertiary = Pink80
++private val LightColors = lightColorScheme(
++    primary = Color(0xFF006B60), onPrimary = Color.White,
++    primaryContainer = Color(0xFFBAF0DF), onPrimaryContainer = Color(0xFF002E26),
++    secondary = Color(0xFF4C635D), onSecondary = Color.White,
++    secondaryContainer = Color(0xFFD0E8DF), onSecondaryContainer = Color(0xFF09201A),
++    tertiary = Color(0xFF805400), onTertiary = Color.White,
++    tertiaryContainer = Color(0xFFFFDDB2), onTertiaryContainer = Color(0xFF291800),
++    background = Color(0xFFF4F8F5), onBackground = Color(0xFF18211E),
++    surface = Color(0xFFF9FCF9), onSurface = Color(0xFF18211E),
++    surfaceVariant = Color(0xFFE0EAE4), onSurfaceVariant = Color(0xFF404A45),
++    outline = Color(0xFF707A74), outlineVariant = Color(0xFFBFCAC3),
++    error = Color(0xFFBA1A1A), onError = Color.White,
++    errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002)
+ )
+-
+-private val LightColorScheme = lightColorScheme(
+-    primary = Purple40,
+-    secondary = PurpleGrey40,
+-    tertiary = Pink40
+-
+-    /* Other default colors to override
+-    background = Color(0xFFFFFBFE),
+-    surface = Color(0xFFFFFBFE),
+-    onPrimary = Color.White,
+-    onSecondary = Color.White,
+-    onTertiary = Color.White,
+-    onBackground = Color(0xFF1C1B1F),
+-    onSurface = Color(0xFF1C1B1F),
+-    */
++private val DarkColors = darkColorScheme(
++    primary = Color(0xFF82D5BF), onPrimary = Color(0xFF00382F),
++    primaryContainer = Color(0xFF005045), onPrimaryContainer = Color(0xFFBAF0DF),
++    secondary = Color(0xFFB4CCC2), onSecondary = Color(0xFF20352D),
++    secondaryContainer = Color(0xFF364B42), onSecondaryContainer = Color(0xFFD0E8DF),
++    tertiary = Color(0xFFF5BD70), onTertiary = Color(0xFF462A00),
++    tertiaryContainer = Color(0xFF624000), onTertiaryContainer = Color(0xFFFFDDB2),
++    background = Color(0xFF101815), onBackground = Color(0xFFDEE8E1),
++    surface = Color(0xFF151F1A), onSurface = Color(0xFFDEE8E1),
++    surfaceVariant = Color(0xFF35413A), onSurfaceVariant = Color(0xFFBFCAC3),
++    outline = Color(0xFF89958D), outlineVariant = Color(0xFF404C44),
++    error = Color(0xFFFFB4AB), onError = Color(0xFF690005),
++    errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6)
+ )
+ 
+ @Composable
+ fun ClimateCameraTheme(
+     darkTheme: Boolean = isSystemInDarkTheme(),
+-    // Dynamic color is available on Android 12+
+-    dynamicColor: Boolean = true,
++    dynamicColor: Boolean = false,
+     content: @Composable () -> Unit
+ ) {
+-    val colorScheme = when {
+-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+-            val context = LocalContext.current
+-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+-        }
+-
+-        darkTheme -> DarkColorScheme
+-        else -> LightColorScheme
+-    }
+-
+-    MaterialTheme(
+-        colorScheme = colorScheme,
+-        typography = Typography,
+-        content = content
+-    )
+-}
+\ No newline at end of file
++    val colors = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++        val context = LocalContext.current
++        if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
++    } else if (darkTheme) DarkColors else LightColors
++    MaterialTheme(colorScheme = colors, typography = Typography,
++        shapes = Shapes(extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
++            medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(24.dp), extraLarge = RoundedCornerShape(28.dp)),
++        content = content)
++}
+--- a/app/src/main/java/com/example/climatecamera/ui/theme/Type.kt
++++ b/app/src/main/java/com/example/climatecamera/ui/theme/Type.kt
+@@ -6,29 +6,13 @@
+ import androidx.compose.ui.text.font.FontWeight
+ import androidx.compose.ui.unit.sp
+ 
+-// Set of Material typography styles to start with
+ val Typography = Typography(
+-    bodyLarge = TextStyle(
+-        fontFamily = FontFamily.Default,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 16.sp,
+-        lineHeight = 24.sp,
+-        letterSpacing = 0.5.sp
+-    )
+-    /* Other default text styles to override
+-    titleLarge = TextStyle(
+-        fontFamily = FontFamily.Default,
+-        fontWeight = FontWeight.Normal,
+-        fontSize = 22.sp,
+-        lineHeight = 28.sp,
+-        letterSpacing = 0.sp
+-    ),
+-    labelSmall = TextStyle(
+-        fontFamily = FontFamily.Default,
+-        fontWeight = FontWeight.Medium,
+-        fontSize = 11.sp,
+-        lineHeight = 16.sp,
+-        letterSpacing = 0.5.sp
+-    )
+-    */
+-)
+\ No newline at end of file
++    headlineLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 38.sp, lineHeight = 46.sp, letterSpacing = (-1).sp),
++    headlineMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 28.sp, lineHeight = 36.sp),
++    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
++    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 24.sp),
++    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
++    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
++    labelLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp),
++    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.4.sp)
++)
+--- /dev/null
++++ b/docs/ACCEPTANCE_v1.0.9_RU.md
+@@ -0,0 +1,34 @@
++# Приёмка v1.0.9
++
++Статус: сценарии для ручной проверки. В среде подготовки они не выполнялись. Начните с тестовой камеры и тестового продукта; сохраните важные CSV вне приложения.
++
++## Сборка и обновление
++
++1. Выполнить Gradle Sync, :app:testDebugUnitTest и :app:assembleDebug без изменения версий инструментов.
++2. Проверить версию 1.0.9 / versionCode 10 в проекте и собранном APK.
++3. Установить поверх v1.0.8 с тем же ключом подписи, без удаления приложения. Проверить сохранность настроек подключения и архива.
++
++## Интерфейс
++
++1. Включить светлую, затем тёмную системную тему. Проверить читаемость текста, ошибок, кнопок и карточек на всех четырёх вкладках.
++2. Проверить нижнюю навигацию и возврат из архива к продуктам. Повернуть экран и убедиться, что элементы доступны, не перекрываются системными панелями.
++3. Проверить узкий телефон, альбомную ориентацию, широкий экран и увеличенный системный шрифт. Карточки и подписи не должны становиться недоступными.
++4. Раскрыть и свернуть подключение; ввести адрес, логин и пароль; убедиться, что кнопка подключения и ошибки доступны с клавиатурой. Пароль не должен публиковаться в сообщениях и репозитории.
++5. Раскрыть сведения о камере и проверить возможность прокрутки до нижних элементов.
++
++## Данные и ошибки
++
++1. При действующем подключении сверить температуру, влажность, обороты и уставки с веб-интерфейсом ESP32.
++2. Проверить состояния холодильника, увлажнителя, вентилятора и автоматики. Отображение не должно отправлять команды управления.
++3. На тестовой установке отключить сеть: ошибка/предупреждение должны быть видны, последние значения не должны выглядеть свежими.
++4. Перейти на другую вкладку и проверить предупреждение об остановке обновления; вернуться и проверить возобновление.
++5. Возобновить соединение. Проверить обновление времени полуения данных, снятие предупреждения только после нового успешного ответа.
++6. Проверить неверный адрес/учётные данные и отмену подключения. Приложение не должно зависать или скрывать ошибку.
++
++## Регрессия продуктов и архива
++
++1. На тестовом продукте проверить список, добавление, взвешивание и проверку ввода; сравнить с рабочей v1.0.8.
++2. Проверить чтение существующего архива без подключения к камере, заметки, CSV и «Поделиться».
++3. При необходимости проверить извлечение только тестового продукта и убедиться в сохранении архивной копии перед командой. Не повторять команду автоматически при потере ответа.
++
++Запишите модель телефона, Android, результат сборки, пройденные сценарии и ошибки. До завершения приёмки это кандидат исходников, а не подтверждённый рабочий Android-релиз.
+--- /dev/null
++++ b/verification/v1.0.9/SyntaxCheck.kt
+@@ -0,0 +1,29 @@
++import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
++import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
++import org.jetbrains.kotlin.config.CompilerConfiguration
++import org.jetbrains.kotlin.psi.KtPsiFactory
++import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer
++import org.jetbrains.kotlin.com.intellij.psi.PsiErrorElement
++import org.jetbrains.kotlin.com.intellij.psi.util.PsiTreeUtil
++import java.io.File
++fun main(args: Array<String>) {
++    val disposable = Disposer.newDisposable()
++    try {
++        val env = KotlinCoreEnvironment.createForProduction(disposable, CompilerConfiguration(), EnvironmentConfigFiles.JVM_CONFIG_FILES)
++        val factory = KtPsiFactory(env.project, false)
++        var count = 0
++        var errors = 0
++        File(args[0]).walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { f ->
++            count++
++            val text = f.readText()
++            val psi = factory.createFile(f.name, text)
++            PsiTreeUtil.collectElementsOfType(psi, PsiErrorElement::class.java).forEach { e ->
++                errors++
++                val line = text.take(e.textOffset).count { it == '\n' } + 1
++                println("${f.relativeTo(File(args[0]))}:$line: ${e.errorDescription}")
++            }
++        }
++        println("Kotlin files parsed: $count; syntax errors: $errors")
++        if (errors > 0) throw IllegalStateException("Kotlin syntax errors")
++    } finally { Disposer.dispose(disposable) }
++}
+--- /dev/null
++++ b/verification/v1.0.9/jvm-tests.log
+@@ -0,0 +1,6 @@
++JUnit version 4.13.2
++................................................................
++Time: 0.119
++
++OK (64 tests)
++
+--- /dev/null
++++ b/verification/v1.0.9/kotlin-syntax.log
+@@ -0,0 +1 @@
++Kotlin files parsed: 27; syntax errors: 0
+--- /dev/null
++++ b/verification/v1.0.9/syntax.json
+@@ -0,0 +1,14 @@
++[
++  {
++    "file": "app/src/main/java/com/example/climatecamera/ArchiveScreen.kt",
++    "line": 25,
++    "kind": "ERROR",
++    "text": "@Composable\ninternal fun ArchiveScreen(connection: ConnectionSettings?) {\n    val context = LocalContext.current\n    val"
++  },
++  {
++    "file": "app/src/main/java/com/example/climatecamera/ArchiveScreen.kt",
++    "line": 52,
++    "kind": "ERROR",
++    "text": "(e: Exception) { error = \"Не удалось прочитать архив: ${e.message}\" }\n            finally { busy = false }\n        }\n   "
++  }
++]
+\ No newline at end of file
+--- /dev/null
++++ b/verification/v1.0.9/xml-check.log
+@@ -0,0 +1 @@
++Parsed 11 XML files; malformed files: 0
+--- /dev/null
++++ b/verification/v1.0.9/patch-check.log
+@@ -0,0 +1 @@
++patch --dry-run -p1 against base abcfd6638e5f71243bb91fd95a869632bbf04d7b: passed
