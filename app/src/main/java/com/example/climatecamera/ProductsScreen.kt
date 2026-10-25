@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -34,6 +35,7 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
     val settings = connection
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val archiveStore = remember(context) { ProductArchiveStore.get(context) }
     var filterName by rememberSaveable { mutableStateOf(ProductFilter.ALL.name) }
     var sortName by rememberSaveable { mutableStateOf(ProductSort.SLOT.name) }
     var slotQuery by rememberSaveable { mutableStateOf("") }
@@ -94,11 +96,19 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
         scope.launch {
             var committed = false
             try {
-                withContext(Dispatchers.IO) { CameraTransport.mutate(settings, action, fields) }
+                val removalMessage = if (action == "remove") {
+                    val expected = remove ?: throw IOException("Выберите продукт заново")
+                    withContext(NonCancellable + Dispatchers.IO) {
+                        CameraTransport.archiveAndRemove(settings, expected, archiveStore)
+                    }
+                } else {
+                    withContext(Dispatchers.IO) { CameraTransport.mutate(settings, action, fields) }
+                    null
+                }
                 message = when (action) {
                     "add" -> "ESP32 подтвердил загрузку нового продукта."
                     "weigh" -> "ESP32 подтвердил сохранение контрольного веса."
-                    else -> "ESP32 подтвердил извлечение продукта и удаление его данных."
+                    else -> removalMessage.orEmpty()
                 }
                 committed = true
                 editor = null
@@ -288,9 +298,9 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
     }
     remove?.let { product ->
         AlertDialog(onDismissRequest = { if (!busy) remove = null }, title = { Text("Извлечь продукт №${product.id}?") }, text = {
-            Text("Начальный вес и вся история будут удалены из памяти ESP32 без возможности отмены. При необходимости сначала сохраните CSV.")
+            Text("Сначала доступная история сохранится в локальном архиве телефона. Только после успешного сохранения приложение отправит команду освобождения слота ESP32. Архив не является резервной копией и может исчезнуть при удалении приложения. Данные на ESP32 удаляются без отмены.")
         }, confirmButton = {
-            TextButton(enabled = !writeBlocked, onClick = { mutate("remove", mapOf("id" to product.id.toString())) }) { Text("Удалить данные") }
+            TextButton(enabled = !writeBlocked, onClick = { mutate("remove", mapOf("id" to product.id.toString())) }) { Text("В архив и извлечь") }
         }, dismissButton = { TextButton(enabled = !busy, onClick = { remove = null }) { Text("Отмена") } })
     }
 }

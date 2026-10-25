@@ -1,0 +1,19 @@
+{
+  "version": "1.0.8",
+  "versionCode": 9,
+  "base_commit": "195764a99893a32477fc034d8bccb97a5ade8a2a",
+  "repository": "https://github.com/vahmurka1975/APP-Climate-Camera",
+  "kotlin_jvm_compilation": "PASS (7 platform-independent source files and 8 unit-test files)",
+  "junit": "PASS: 64 tests",
+  "xml_parse": {
+    "result": "PASS",
+    "files": 11
+  },
+  "android_compose_gradle_build": "NOT RUN: Android SDK not installed",
+  "android_instrumentation_tests": "NOT RUN",
+  "device_esp32_tests": "NOT RUN",
+  "apk_built": false,
+  "firmware_changed": false,
+  "github_modified": false,
+  "scope_note": "JVM tests do not validate Android SQLite integration, Compose rendering, FileProvider, network behavior or installation."
+}

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.climatecamera
 
 import android.os.Bundle
@@ -303,10 +305,14 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 "Восстановление связи: пауза между чтениями ${nextPollMs / 1000} с. Команды записи не повторяются.")
         }
 
-        TabRow(selectedTabIndex = selectedTab) {
+        ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 0.dp) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Настройки") })
+            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Архив") })
+        }
+        if (selectedTab == 3) {
+            ArchiveScreen(connection)
         }
         if (selectedTab == 2) {
             key(connection) { CameraSettingsScreen(connection) }

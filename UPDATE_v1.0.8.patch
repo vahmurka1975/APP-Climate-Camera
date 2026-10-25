@@ -1,0 +1,804 @@
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1,47 +1,40 @@
+-# ClimateCamera Android v1.0.5
++# ClimateCamera Android v1.0.8 — исходники
+ 
+-Исходный проект на основе v1.0.4 из https://github.com/vahmurka1975/APP-Climate-Camera
+-Точная база: коммит 34a9e1ab45a54447bc47f931875897e920639b0e.
+-Версия приложения: 1.0.5; versionCode: 6; applicationId: com.example.climatecamera.
++База: APP-Climate-Camera, коммит `195764a99893a32477fc034d8bccb97a5ade8a2a`.
++Версия: `1.0.8`, versionCode: `9`, applicationId: `com.example.climatecamera`.
++Это исходный проект для Android Studio, не готовый APK. Прошивка ESP32 не изменена.
+ 
+-## Изменения
++## Что добавлено
+ 
+-Добавлена вкладка «Настройки» с 11 параметрами: температура и её гистерезис, влажность и её гистерезис, длительность работы и паузы вентилятора, целевые обороты, поправки температуры/влажности, Kp и Ki. Диапазоны согласованы с обработчиком handleSetConfig из предоставленного NetworkServer.cpp. Допустимы десятичная точка и запятая. Целочисленные поля не принимают дробные значения.
++Вкладка «Архив» с локальным SQLite-хранилищем. Архив читается без подключения к камере. Для каждой копии сохраняются отдельный UUID, дата сохранения по телефону, отпечаток адреса камеры, начальный вес, цель усушки, дата закладки и доступные взвешивания. Можно просматривать историю, менять название и заметки, сохранять CSV через системный выбор файла и отправлять CSV через «Поделиться».
+ 
+-Права берутся из readOnly в /api/status, а не из имени пользователя. Если поле отсутствует, запись запрещена. Перед POST повторно проверяются права, OTA, локальное редактирование, токен и изменяемые поля относительно прочитанной формы. Эта проверка уменьшает риск перезаписи чужих изменений, но не является атомарной блокировкой на ESP32. Перед отправкой показывается подтверждение. Опция «Сохранить в память ESP32 (NVS)» передаёт save=1, иначе save=0. После ответа настройки перечитываются. Автоматического повторения POST нет: при тайм-ауте сначала обновите форму и проверьте фактические значения.
++Перед извлечением приложение повторно читает права, токен и продукт. Если данные изменились, требуется обновить список и подтвердить операцию заново. Сначала копия синхронно сохраняется в SQLite, и только затем отправляется один POST /api/products/remove. Если сохранить копию не удалось, POST не отправляется. Успешный ответ ESP32 фиксируется отдельно от последующего наблюдения пустого слота.
+ 
+-После успешного получения телеметрии сохраняются адрес и логин. Пароль сохраняется только при включённом флажке «Запомнить пароль на этом устройстве». Данные зашифрованы AES-GCM, ключ находится в Android Keystore; API-токен постоянно не хранится. Настройки исключены из облачного резервного копирования и переноса; allowBackup=false. Кнопка «Забыть подключение» доступна после остановки обновления, удаляет сохранённые данные и ключ. При потере ключа введите данные заново или используйте эту кнопку.
++При потере ответа копия остаётся с неподтверждённым результатом. Автоматического повторения команды нет. Во вкладке «Архив» можно только прочитать текущее состояние слота: пуст, продукт совпадает или слот изменился. Это наблюдение, а не доказательство выполнения прежней команды. Проверка доступна при подключении к тому же адресу камеры. После наблюдения пользователь может вернуться к продуктам и отдельно подтвердить новую операцию, если это действительно необходимо.
+ 
+-При запуске поля восстанавливаются, но подключение начинается только после нажатия «Подключиться». Изменить запоминание пароля можно после остановки обновления; для сохранения нового выбора снова подключитесь и дождитесь успешного ответа.
++## Ограничения
+ 
+-Модуль продуктов (ProductsScreen.kt, ProductModels.kt) и политики соединения/актуальности из v1.0.4 сохранены без изменений. Никакие исходники прошивки ESP32 в этот архив не входят. Совместимость настроек проверялась по предоставленному NetworkServer.cpp, а не по подключённому устройству.
++Архив создаётся только при извлечении через эту версию приложения. Извлечение через веб-интерфейс или другой телефон не архивируется. В архив попадают только записи, которые ESP32 ещё хранит: его предел 32 взвешивания не увеличен, ранее потерянные записи не восстанавливаются. Постоянной синхронизации активных продуктов и общего архива между телефонами нет.
+ 
+-## Сборка и установка
++Локальная база находится в приватной папке приложения, но отдельного шифрования базы в этой версии нет. Удаление приложения или очистка данных удаляет архив. База исключена из штатного резервного копирования/переноса. CSV — экспорт для просмотра, импорт или восстановление базы из CSV не реализованы. В CSV входят ваши названия и заметки: не записывайте в них секреты. Адрес камеры представлен SHA-256-отпечатком; автоматически пароли и API-токены не экспортируются.
+ 
+-Распакуйте архив в отдельную папку и откройте корень проекта в Android Studio. Используйте JDK, Gradle и Android SDK, соответствующие исходной v1.0.4: файлы настройки сборки и Gradle Wrapper сохранены из базы, изменены только versionName/versionCode и включена поддержка BuildConfig, если она требовалась. Не понижайте версии зависимостей вслепую.
++Разные адреса одного ESP32 считаются разными источниками. Прошивка не даёт уникальный идентификатор партии, поэтому после изменения или повторного использования слота приложение не может достоверно восстановить судьбу прежней партии. Повторная ручная попытка извлечения может создать ещё одну архивную копию; записи различаются UUID и статусом.
+ 
+-После синхронизации выполните Build > Make Project либо команды:
++Архив пока не предназначен как единственное место хранения важных данных. Сохраняйте CSV вне приложения и не удаляйте рабочую установку без необходимости.
+ 
+-```sh
+-./gradlew :app:testDebugUnitTest :app:assembleDebug
+-```
++## Проверки именно этого выпуска
+ 
+-В Windows используйте gradlew.bat. APK после успешной сборки находится в app/build/outputs/apk/debug/. В этом архиве готового APK нет.
++Выполнена настоящая Kotlin/JVM-компиляция семи платформонезависимых файлов приложения и восьми файлов unit-тестов. JUnit: **64 теста успешно**. Проверен XML ресурсов и манифеста, номер версии, состав архива и контрольные суммы.
+ 
+-Для обновления поверх установленной v1.0.4 требуется тот же ключ подписи. При несовпадении подписи Android не установит обновление; удаление старого приложения удаляет его локальные данные. Сохраните рабочую копию проекта и ключи до обновления.
++Полная Gradle-сборка Android/Compose, Android Lint, инструментальные тесты SQLite/FileProvider, проверка на телефоне и ESP32 **не выполнялись**: Android SDK в среде подготовки отсутствует. Успешные JVM-тесты не являются подтверждением успешной Android-сборки. APK не создавался. Логи: verification/v1.0.8; отчёт: VALIDATION_v1.0.8.json. Старые отчёты относятся к прежним версиям.
+ 
+-## Подключение
++## Установка исходников и проверка
+ 
+-Введите адрес контроллера, логин и пароль. Поддерживаются http:// и https://, порт и окончание /api/status. Выберите сохранение пароля при необходимости и нажмите «Подключиться». Для настройки войдите с учётными данными администратора и откройте вкладку «Настройки». Обновите форму, измените одно значение, подтвердите и проверьте перечитанный результат.
++1. Сохраните рабочую v1.0.7, ключ подписи и текущие локальные изменения. Не удаляйте приложение на телефоне без необходимости.
++2. Распакуйте ZIP в отдельную папку, откройте корень в Android Studio и выполните Gradle Sync. Версии AGP, Gradle, Compose и SDK сохранены из вашего репозитория; не понижайте их вслепую.
++3. Выполните `gradlew.bat :app:testDebugUnitTest :app:assembleDebug` (Windows) либо `./gradlew :app:testDebugUnitTest :app:assembleDebug` (Linux/macOS).
++4. Устанавливайте обновление с тем же applicationId и тем же ключом подписи. Если сборка останавливается, сохраните полный текст ошибки; не заменяйте рабочий APK непроверенной сборкой.
++5. Пройдите сценарии из docs/ACCEPTANCE_v1.0.8_RU.md на тестовом продукте.
++6. После проверки переносите изменения в свою клонированную Git-папку. Не копируйте поверх неё папку .git, local.properties, .idea или build. Просмотрите diff, затем Commit и Push. Существующий GitHub Actions после Push может выполнить Android-сборку в вашем репозитории; здесь его результат не проверялся.
+ 
+-Используются существующие GET /api/status, GET /api/products, POST /api/products/add, /weigh, /remove и POST /api/config. Авторизация Basic; изменения используют свежий X-Climate-Token. Защита хранения не шифрует HTTP-трафик: для удалённого доступа предпочтительны VPN или HTTPS с доверенным сертификатом. Проверка сертификатов не отключается. Не публикуйте пароли и токены в отчётах.
+-
+-## Проверка перед использованием
+-
+-Проверьте вход администратора и изменение одной уставки с повторным чтением. Проверьте вход viewer: запись должна быть недоступна. Проверьте NVS после перезапуска ESP32. Проверьте восстановление полей после закрытия приложения, варианты с паролем и без него и удаление подключения. Затем проверьте добавление, взвешивание и извлечение тестового продукта, потерю сети и индикацию устаревших данных.
+-
+-## Фактически выполненные проверки
+-
+-Выполнены синтаксический разбор Kotlin-файлов через tree-sitter, разбор XML, сверка неизменности модуля продуктов и политик с точной базой v1.0.4, контроль содержимого ZIP и SHA-256. Это статические проверки, не Kotlin-компиляция, не Android Lint и не испытания на устройстве. В среде подготовки нет Java и Android SDK: Gradle-сборка, unit-тесты и инструментальные тесты НЕ запускались. Существующие и добавленные тесты включены как исходники.
+-
+-Подробные результаты находятся в VALIDATION_v1.0.5.json. UPDATE_v1.0.5.patch содержит изменения относительно указанного коммита. Старые файлы RELEASE, UPDATE, VALIDATION и SHA256SUMS с версиями 1.0.2–1.0.4 сохранены как история; их результаты не относятся к этому выпуску.
++UPDATE_v1.0.8.patch — альтернативный способ переноса относительно указанной базы. Не применяйте его поверх уже скопированных изменений. SHA256SUMS_v1.0.8.txt содержит контрольные суммы файлов выпуска.
+diff --git a/RELEASE_v1.0.8_RU.md b/RELEASE_v1.0.8_RU.md
+--- /dev/null
++++ b/RELEASE_v1.0.8_RU.md
+@@ -0,0 +1,40 @@
++# ClimateCamera Android v1.0.8 — исходники
++
++База: APP-Climate-Camera, коммит `195764a99893a32477fc034d8bccb97a5ade8a2a`.
++Версия: `1.0.8`, versionCode: `9`, applicationId: `com.example.climatecamera`.
++Это исходный проект для Android Studio, не готовый APK. Прошивка ESP32 не изменена.
++
++## Что добавлено
++
++Вкладка «Архив» с локальным SQLite-хранилищем. Архив читается без подключения к камере. Для каждой копии сохраняются отдельный UUID, дата сохранения по телефону, отпечаток адреса камеры, начальный вес, цель усушки, дата закладки и доступные взвешивания. Можно просматривать историю, менять название и заметки, сохранять CSV через системный выбор файла и отправлять CSV через «Поделиться».
++
++Перед извлечением приложение повторно читает права, токен и продукт. Если данные изменились, требуется обновить список и подтвердить операцию заново. Сначала копия синхронно сохраняется в SQLite, и только затем отправляется один POST /api/products/remove. Если сохранить копию не удалось, POST не отправляется. Успешный ответ ESP32 фиксируется отдельно от последующего наблюдения пустого слота.
++
++При потере ответа копия остаётся с неподтверждённым результатом. Автоматического повторения команды нет. Во вкладке «Архив» можно только прочитать текущее состояние слота: пуст, продукт совпадает или слот изменился. Это наблюдение, а не доказательство выполнения прежней команды. Проверка доступна при подключении к тому же адресу камеры. После наблюдения пользователь может вернуться к продуктам и отдельно подтвердить новую операцию, если это действительно необходимо.
++
++## Ограничения
++
++Архив создаётся только при извлечении через эту версию приложения. Извлечение через веб-интерфейс или другой телефон не архивируется. В архив попадают только записи, которые ESP32 ещё хранит: его предел 32 взвешивания не увеличен, ранее потерянные записи не восстанавливаются. Постоянной синхронизации активных продуктов и общего архива между телефонами нет.
++
++Локальная база находится в приватной папке приложения, но отдельного шифрования базы в этой версии нет. Удаление приложения или очистка данных удаляет архив. База исключена из штатного резервного копирования/переноса. CSV — экспорт для просмотра, импорт или восстановление базы из CSV не реализованы. В CSV входят ваши названия и заметки: не записывайте в них секреты. Адрес камеры представлен SHA-256-отпечатком; автоматически пароли и API-токены не экспортируются.
++
++Разные адреса одного ESP32 считаются разными источниками. Прошивка не даёт уникальный идентификатор партии, поэтому после изменения или повторного использования слота приложение не может достоверно восстановить судьбу прежней партии. Повторная ручная попытка извлечения может создать ещё одну архивную копию; записи различаются UUID и статусом.
++
++Архив пока не предназначен как единственное место хранения важных данных. Сохраняйте CSV вне приложения и не удаляйте рабочую установку без необходимости.
++
++## Проверки именно этого выпуска
++
++Выполнена настоящая Kotlin/JVM-компиляция семи платформонезависимых файлов приложения и восьми файлов unit-тестов. JUnit: **64 теста успешно**. Проверен XML ресурсов и манифеста, номер версии, состав архива и контрольные суммы.
++
++Полная Gradle-сборка Android/Compose, Android Lint, инструментальные тесты SQLite/FileProvider, проверка на телефоне и ESP32 **не выполнялись**: Android SDK в среде подготовки отсутствует. Успешные JVM-тесты не являются подтверждением успешной Android-сборки. APK не создавался. Логи: verification/v1.0.8; отчёт: VALIDATION_v1.0.8.json. Старые отчёты относятся к прежним версиям.
++
++## Установка исходников и проверка
++
++1. Сохраните рабочую v1.0.7, ключ подписи и текущие локальные изменения. Не удаляйте приложение на телефоне без необходимости.
++2. Распакуйте ZIP в отдельную папку, откройте корень в Android Studio и выполните Gradle Sync. Версии AGP, Gradle, Compose и SDK сохранены из вашего репозитория; не понижайте их вслепую.
++3. Выполните `gradlew.bat :app:testDebugUnitTest :app:assembleDebug` (Windows) либо `./gradlew :app:testDebugUnitTest :app:assembleDebug` (Linux/macOS).
++4. Устанавливайте обновление с тем же applicationId и тем же ключом подписи. Если сборка останавливается, сохраните полный текст ошибки; не заменяйте рабочий APK непроверенной сборкой.
++5. Пройдите сценарии из docs/ACCEPTANCE_v1.0.8_RU.md на тестовом продукте.
++6. После проверки переносите изменения в свою клонированную Git-папку. Не копируйте поверх неё папку .git, local.properties, .idea или build. Просмотрите diff, затем Commit и Push. Существующий GitHub Actions после Push может выполнить Android-сборку в вашем репозитории; здесь его результат не проверялся.
++
++UPDATE_v1.0.8.patch — альтернативный способ переноса относительно указанной базы. Не применяйте его поверх уже скопированных изменений. SHA256SUMS_v1.0.8.txt содержит контрольные суммы файлов выпуска.
+diff --git a/VALIDATION_v1.0.8.json b/VALIDATION_v1.0.8.json
+--- /dev/null
++++ b/VALIDATION_v1.0.8.json
+@@ -0,0 +1,19 @@
++{
++  "version": "1.0.8",
++  "versionCode": 9,
++  "base_commit": "195764a99893a32477fc034d8bccb97a5ade8a2a",
++  "repository": "https://github.com/vahmurka1975/APP-Climate-Camera",
++  "kotlin_jvm_compilation": "PASS (7 platform-independent source files and 8 unit-test files)",
++  "junit": "PASS: 64 tests",
++  "xml_parse": {
++    "result": "PASS",
++    "files": 11
++  },
++  "android_compose_gradle_build": "NOT RUN: Android SDK not installed",
++  "android_instrumentation_tests": "NOT RUN",
++  "device_esp32_tests": "NOT RUN",
++  "apk_built": false,
++  "firmware_changed": false,
++  "github_modified": false,
++  "scope_note": "JVM tests do not validate Android SQLite integration, Compose rendering, FileProvider, network behavior or installation."
++}
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 8
+-        versionName = "1.0.7"
++        versionCode = 9
++        versionName = "1.0.8"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+@@ -47,6 +47,7 @@
+     implementation(libs.androidx.core.ktx)
+     implementation(libs.androidx.lifecycle.runtime.ktx)
+     testImplementation(libs.junit)
++    testImplementation("org.json:json:20240303")
+     androidTestImplementation(platform(libs.androidx.compose.bom))
+     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+     androidTestImplementation(libs.androidx.espresso.core)
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -13,6 +13,13 @@
+         android:roundIcon="@mipmap/ic_launcher_round"
+         android:supportsRtl="true"
+         android:theme="@style/Theme.ClimateCamera">
++        <provider
++            android:name="androidx.core.content.FileProvider"
++            android:authorities="${applicationId}.archivefiles"
++            android:exported="false"
++            android:grantUriPermissions="true">
++            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/archive_file_paths" />
++        </provider>
+         <activity
+             android:name=".MainActivity"
+             android:exported="true"
+diff --git a/app/src/main/java/com/example/climatecamera/ArchiveScreen.kt b/app/src/main/java/com/example/climatecamera/ArchiveScreen.kt
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ArchiveScreen.kt
+@@ -0,0 +1,205 @@
++package com.example.climatecamera
++
++import android.content.ClipData
++import android.content.Intent
++import androidx.activity.compose.rememberLauncherForActivityResult
++import androidx.activity.result.contract.ActivityResultContracts
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.verticalScroll
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.runtime.saveable.rememberSaveable
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.platform.LocalContext
++import androidx.compose.ui.unit.dp
++import androidx.core.content.FileProvider
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++import java.io.File
++import java.text.SimpleDateFormat
++import java.util.Date
++import java.util.Locale
++
++@Composable
++internal fun ArchiveScreen(connection: ConnectionSettings?) {
++    val context = LocalContext.current
++    val scope = rememberCoroutineScope()
++    val store = remember(context) { ProductArchiveStore.get(context) }
++    // Application-scoped helper remains available across tab changes.
++    var entries by remember { mutableStateOf<List<ArchivedProduct>>(emptyList()) }
++    var busy by remember { mutableStateOf(false) }
++    var loaded by remember { mutableStateOf(false) }
++    var error by remember { mutableStateOf<String?>(null) }
++    var message by remember { mutableStateOf("") }
++    var detail by remember { mutableStateOf<ArchivedProduct?>(null) }
++    var editing by remember { mutableStateOf<ArchivedProduct?>(null) }
++    var exportText by rememberSaveable { mutableStateOf("") }
++    val cameraKey = remember(connection?.address) {
++        connection?.let { runCatching { ArchivePolicy.cameraKey(it.address) }.getOrNull() }
++    }
++    val readArchive: suspend () -> Unit = {
++        entries = withContext(Dispatchers.IO) { store.list() }
++        loaded = true
++    }
++    fun load() {
++        if (busy) return
++        busy = true
++        scope.launch {
++            try { readArchive(); error = null }
++            catch (e: CancellationException) { throw e }
++            catch (e: Exception) { error = "Не удалось прочитать архив: ${e.message}" }
++            finally { busy = false }
++        }
++    }
++    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
++        if (uri != null) {
++            busy = true
++            scope.launch {
++                try {
++                    withContext(Dispatchers.IO) {
++                        val stream = context.contentResolver.openOutputStream(uri, "wt")
++                            ?: throw java.io.IOException("Не удалось открыть файл")
++                        stream.use { it.write(exportText.toByteArray(Charsets.UTF_8)) }
++                    }
++                    message = "CSV архива сохранён. Это экспорт для просмотра, не файл восстановления базы."
++                    error = null
++                } catch (e: CancellationException) { throw e }
++                catch (e: Exception) { error = "Ошибка сохранения CSV: ${e.message}" }
++                finally { busy = false }
++            }
++        }
++    }
++    LaunchedEffect(Unit) { load() }
++    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
++        Text("Локальный архив", style = MaterialTheme.typography.titleLarge)
++        Text("Копии продуктов на этом телефоне, не текущие показания ESP32. Архив доступен без подключения.")
++        Text("Удаление приложения или очистка его данных удалит архив. CSV не содержит паролей и токенов. Восстановление базы из CSV в этой версии не поддерживается.")
++        if (busy) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
++        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
++        if (message.isNotBlank()) Text(message)
++        OutlinedButton(enabled = !busy, onClick = { load() }) { Text("Обновить архив") }
++        if (loaded && entries.isEmpty()) Text("Архив пока пуст. Продукты сохраняются перед извлечением через это приложение.")
++        if (entries.isNotEmpty()) {
++            Text("Сохранённых копий: ${entries.size}")
++            OutlinedButton(enabled = !busy, onClick = {
++                exportText = archiveCsv(entries)
++                exporter.launch("climate-archive.csv")
++            }) { Text("Сохранить CSV архива") }
++            OutlinedButton(enabled = !busy, onClick = {
++                busy = true
++                scope.launch {
++                    try {
++                        val csv = archiveCsv(entries)
++                        val uri = withContext(Dispatchers.IO) {
++                            val dir = File(context.cacheDir, "archive_exports").apply { mkdirs() }
++                            val file = File(dir, "climate-archive.csv")
++                            file.writeText(csv, Charsets.UTF_8)
++                            FileProvider.getUriForFile(context, "${context.packageName}.archivefiles", file)
++                        }
++                        val intent = Intent(Intent.ACTION_SEND).apply {
++                            type = "text/csv"
++                            putExtra(Intent.EXTRA_STREAM, uri)
++                            clipData = ClipData.newRawUri("Архив продуктов", uri)
++                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
++                        }
++                        context.startActivity(Intent.createChooser(intent, "Поделиться архивом"))
++                        error = null
++                    } catch (e: CancellationException) { throw e }
++                    catch (e: Exception) { error = "Не удалось передать CSV: ${e.message}" }
++                    finally { busy = false }
++                }
++            }) { Text("Поделиться CSV") }
++        }
++        entries.forEach { entry ->
++            val p = entry.product
++            Card(modifier = Modifier.fillMaxWidth()) {
++                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
++                    Text(entry.name, style = MaterialTheme.typography.titleMedium)
++                    Text("Слот №${p.id} · Закладка ${ProductDates.display(p.startDate)}")
++                    Text("Источник: ${entry.cameraKey.take(12)} · ID: ${entry.archiveId.take(8)}")
++                    Text("Копия: ${SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(entry.archivedAt))}")
++                    Text(entry.state.label, color = if (entry.state == ArchiveState.PENDING)
++                        MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
++                    Text("Начальный: ${archiveNumber(p.initialWeight)} г · Последний известный: ${archiveNumber(p.lastWeight)} г")
++                    Text("Усушка ${archiveNumber(p.lossPct)} % · Цель ${archiveNumber(p.targetLossPct)} %")
++                    Text("Доступных контрольных измерений: ${p.history.size}")
++                    if (entry.notes.isNotBlank()) Text(entry.notes)
++                    OutlinedButton(enabled = !busy, onClick = { detail = entry }) { Text("История копии") }
++                    TextButton(enabled = !busy, onClick = { editing = entry }) { Text("Название и заметки") }
++                    if (entry.state == ArchiveState.PENDING || entry.state == ArchiveState.STILL_PRESENT || entry.state == ArchiveState.SLOT_CHANGED) {
++                        Text("Проверка только читает слот; команда извлечения не повторяется.")
++                        TextButton(enabled = !busy && connection != null && cameraKey == entry.cameraKey, onClick = {
++                            val settings = connection ?: return@TextButton
++                            busy = true
++                            scope.launch {
++                                try {
++                                    withContext(Dispatchers.IO) {
++                                        val current = CameraTransport.products(settings).products.first { it.id == p.id }
++                                        store.state(entry.archiveId, ArchivePolicy.observed(p, current))
++                                    }
++                                    readArchive()
++                                    message = "Состояние слота проверено. Историческая копия не изменена."
++                                    error = null
++                                } catch (e: CancellationException) { throw e }
++                                catch (e: Exception) { error = ConnectionPolicy.errorMessage(e) }
++                                finally { busy = false }
++                            }
++                        }) { Text("Проверить слот на ESP32") }
++                        if (connection == null || cameraKey != entry.cameraKey) Text("Для проверки подключитесь к исходному адресу камеры.")
++                    }
++                }
++            }
++        }
++    }
++    detail?.let { entry ->
++        AlertDialog(onDismissRequest = { detail = null }, title = { Text(entry.name) }, text = {
++            Column(modifier = Modifier.heightIn(max = 400.dp).then(Modifier.verticalArchiveScroll()),
++                verticalArrangement = Arrangement.spacedBy(8.dp)) {
++                Text("Сохранённая копия; это не актуальный список камеры.")
++                Text("Начальный: ${ProductDates.display(entry.product.startDate)} · ${archiveNumber(entry.product.initialWeight)} г")
++                entry.product.history.forEach { Text("${ProductDates.display(it.date)} · ${archiveNumber(it.weight)} г") }
++            }
++        }, confirmButton = { TextButton(onClick = { detail = null }) { Text("Закрыть") } })
++    }
++    editing?.let { entry ->
++        ArchiveEditDialog(entry, busy, onDismiss = { editing = null }) { name, notes ->
++            busy = true
++            scope.launch {
++                try {
++                    withContext(Dispatchers.IO) { store.edit(entry.archiveId, name, notes) }
++                    editing = null
++                    readArchive()
++                    error = null
++                } catch (e: CancellationException) { throw e }
++                catch (e: Exception) { error = "Ошибка записи архива: ${e.message}" }
++                finally { busy = false }
++            }
++        }
++    }
++}
++
++@Composable
++private fun Modifier.verticalArchiveScroll(): Modifier = this.then(
++    Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())
++)
++
++private fun archiveNumber(value: Double) = String.format(Locale.getDefault(), "%.1f", value)
++
++@Composable
++private fun ArchiveEditDialog(entry: ArchivedProduct, busy: Boolean, onDismiss: () -> Unit,
++                              onSave: (String, String) -> Unit) {
++    var name by remember(entry.archiveId) { mutableStateOf(entry.name) }
++    var notes by remember(entry.archiveId) { mutableStateOf(entry.notes) }
++    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Название и заметки") }, text = {
++        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
++            OutlinedTextField(value = name, onValueChange = { if (it.length <= 120) name = it },
++                enabled = !busy, label = { Text("Название (до 120 символов)") }, singleLine = true)
++            OutlinedTextField(value = notes, onValueChange = { if (it.length <= 4000) notes = it },
++                enabled = !busy, label = { Text("Заметки (до 4000 символов)") }, maxLines = 5)
++        }
++    }, confirmButton = {
++        TextButton(enabled = !busy && name.isNotBlank(), onClick = { onSave(name, notes) }) { Text("Сохранить") }
++    }, dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Отмена") } })
++}
+diff --git a/app/src/main/java/com/example/climatecamera/CameraTransport.kt b/app/src/main/java/com/example/climatecamera/CameraTransport.kt
+--- a/app/src/main/java/com/example/climatecamera/CameraTransport.kt
++++ b/app/src/main/java/com/example/climatecamera/CameraTransport.kt
+@@ -49,6 +49,43 @@
+         val data = request(settings, "/api/products/$action", fields, token)
+         if (!data.optBoolean("ok", false)) throw IOException(data.optString("message", "Операция отклонена"))
+         data.optString("message", "Операция выполнена")
++    }
++
++    /** Persist the exact freshly-read product before sending ONE destructive POST. */
++    fun archiveAndRemove(settings: ConnectionSettings, expected: Product, store: ProductArchiveStore): String = synchronized(lock) {
++        val status = request(settings, "/api/status")
++        if (status.optBoolean("readOnly", true)) throw IOException("Для извлечения нужен администратор")
++        if (status.optBoolean("otaInProgress", false) || status.optBoolean("localEditing", false)) {
++            throw IOException("ESP32 занят обновлением или локальным редактированием")
++        }
++        val token = status.optString("token")
++        if (token.isBlank()) throw IOException("Контроллер не выдал токен")
++        val current = ProductsSnapshot.fromJson(request(settings, "/api/products"), status)
++            .products.first { it.id == expected.id }
++        if (!current.active || current != expected) throw IOException("Данные продукта изменились. Обновите список и подтвердите извлечение заново")
++        val key = ArchivePolicy.cameraKey(settings.address)
++        if (store.list().any { it.cameraKey == key && it.product.id == current.id && it.state == ArchiveState.PENDING }) {
++            throw IOException("В архиве есть неподтверждённая попытка для этого слота. Сначала проверьте её во вкладке Архив")
++        }
++        val entry = ArchivePolicy.pending(key, current)
++        store.insert(entry) // If SQLite fails, no POST is sent.
++        try {
++            val reply = request(settings, "/api/products/remove", mapOf("id" to current.id.toString()), token)
++            if (!reply.optBoolean("ok", false)) throw IOException("ESP32 не подтвердил извлечение")
++            store.state(entry.archiveId, ArchiveState.ACKNOWLEDGED)
++        } catch (e: Exception) {
++            throw IOException("Копия сохранена в архиве. Результат извлечения не подтверждён: ${ConnectionPolicy.errorMessage(e)}. Не повторяйте команду; проверьте запись в архиве", e)
++        }
++        try {
++            val after = ProductsSnapshot.fromJson(request(settings, "/api/products"), request(settings, "/api/status"))
++            if (after.products.first { it.id == current.id }.active) {
++                "Копия в архиве; ESP32 подтвердил извлечение, но сейчас слот занят. Автоматического повтора нет"
++            } else {
++                "Копия сохранена в архиве. ESP32 подтвердил извлечение; при проверке слот пуст"
++            }
++        } catch (_: Exception) {
++            "Копия в архиве; ESP32 подтвердил извлечение. Повторное чтение не удалось; обновите список. Команда не повторяется"
++        }
+     }
+ 
+     fun saveConfig(settings: ConnectionSettings, fields: Map<String, String>, baseline: Map<String, String>, save: Boolean): String = synchronized(lock) {
+diff --git a/app/src/main/java/com/example/climatecamera/MainActivity.kt b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+--- a/app/src/main/java/com/example/climatecamera/MainActivity.kt
++++ b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+@@ -1,3 +1,5 @@
++@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
++
+ package com.example.climatecamera
+ 
+ import android.os.Bundle
+@@ -303,10 +305,14 @@
+                 "Восстановление связи: пауза между чтениями ${nextPollMs / 1000} с. Команды записи не повторяются.")
+         }
+ 
+-        TabRow(selectedTabIndex = selectedTab) {
++        ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 0.dp) {
+             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
+             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
+             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Настройки") })
++            Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Архив") })
++        }
++        if (selectedTab == 3) {
++            ArchiveScreen(connection)
+         }
+         if (selectedTab == 2) {
+             key(connection) { CameraSettingsScreen(connection) }
+diff --git a/app/src/main/java/com/example/climatecamera/ProductArchive.kt b/app/src/main/java/com/example/climatecamera/ProductArchive.kt
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ProductArchive.kt
+@@ -0,0 +1,96 @@
++package com.example.climatecamera
++
++import org.json.JSONArray
++import org.json.JSONObject
++import java.net.URI
++import java.security.MessageDigest
++import java.util.UUID
++
++internal enum class ArchiveState(val label: String) {
++    PENDING("Результат извлечения не подтверждён"),
++    ACKNOWLEDGED("ESP32 подтвердил извлечение"),
++    EMPTY_OBSERVED("При проверке слот пуст"),
++    STILL_PRESENT("При проверке продукт остался в слоте"),
++    SLOT_CHANGED("Слот изменился; результат исходной команды неизвестен")
++}
++
++internal data class ArchivedProduct(
++    val archiveId: String,
++    val cameraKey: String,
++    val archivedAt: Long,
++    val product: Product,
++    val state: ArchiveState,
++    val name: String,
++    val notes: String
++)
++
++internal object ArchivePolicy {
++    // Endpoint fingerprint, never credentials. Different addresses of one device are separate sources.
++    fun cameraKey(address: String): String {
++        val uri = URI(address.trim().trimEnd('/').removeSuffix("/api/status"))
++        require(uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank() &&
++            uri.userInfo == null && uri.query == null && uri.fragment == null)
++        val port = if (uri.port >= 0) uri.port else if (uri.scheme == "https") 443 else 80
++        val normalized = "${uri.scheme}://${uri.host.lowercase(java.util.Locale.ROOT)}:$port${uri.path.orEmpty().trimEnd('/')}"
++        return MessageDigest.getInstance("SHA-256").digest(normalized.toByteArray(Charsets.UTF_8))
++            .joinToString("") { "%02x".format(it.toInt() and 255) }
++    }
++
++    fun pending(cameraKey: String, product: Product): ArchivedProduct {
++        require(product.active && product.id in 1..30)
++        require(product.initialWeight.isFinite() && product.initialWeight in 1.0..100000.0)
++        require(product.targetLossPct.isFinite() && product.targetLossPct in 5.0..80.0)
++        require(ProductDates.valid(product.startDate))
++        require(product.history.all { ProductDates.valid(it.date) && it.weight.isFinite() && it.weight in 1.0..100000.0 })
++        return ArchivedProduct(UUID.randomUUID().toString(), cameraKey, System.currentTimeMillis(),
++            product.copy(history = product.history.toList()), ArchiveState.PENDING, "Продукт №${product.id}", "")
++    }
++
++    fun observed(saved: Product, current: Product): ArchiveState = when {
++        !current.active -> ArchiveState.EMPTY_OBSERVED
++        current == saved -> ArchiveState.STILL_PRESENT
++        else -> ArchiveState.SLOT_CHANGED
++    }
++}
++
++internal object ArchiveCodec {
++    fun encode(p: Product): String {
++        val history = JSONArray()
++        p.history.forEach { history.put(JSONObject().put("date", it.date).put("weight", it.weight)) }
++        return JSONObject().put("id", p.id).put("active", p.active).put("initialWeight", p.initialWeight)
++            .put("targetLossPct", p.targetLossPct).put("startDate", p.startDate).put("history", history).toString()
++    }
++    fun decode(text: String): Product {
++        val o = JSONObject(text)
++        val h = o.getJSONArray("history")
++        return Product(o.getInt("id"), o.getBoolean("active"), o.getDouble("initialWeight"),
++            o.getDouble("targetLossPct"), o.getString("startDate"), (0 until h.length()).map {
++                val w = h.getJSONObject(it)
++                Weighing(w.getString("date"), w.getDouble("weight"))
++            })
++    }
++}
++
++/** Formula-leading user cells are neutralized even when quoted (Excel/LibreOffice). */
++internal fun archiveCsv(entries: List<ArchivedProduct>): String {
++    fun cell(value: String): String {
++        val trimmed = value.trimStart()
++        val safe = if (trimmed.firstOrNull() in setOf('=', '+', '-', '@') ||
++            value.firstOrNull() in setOf('\t', '\r', '\n')) "'" + value else value
++        return "\"" + safe.replace("\"", "\"\"") + "\""
++    }
++    val rows = mutableListOf(listOf("archive_id", "camera_key", "archived_at_utc", "state", "name", "notes",
++        "slot", "start_date", "initial_weight_g", "target_loss_pct", "record_type", "date", "weight_g", "loss_pct"))
++    val date = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
++        timeZone = java.util.TimeZone.getTimeZone("UTC")
++    }
++    for (e in entries) {
++        val p = e.product
++        val prefix = listOf(e.archiveId, e.cameraKey, date.format(java.util.Date(e.archivedAt)), e.state.label,
++            e.name, e.notes, p.id.toString(), p.startDate, p.initialWeight.toString(), p.targetLossPct.toString())
++        rows += prefix + listOf("initial", p.startDate, p.initialWeight.toString(), "0.0")
++        for (w in p.history) rows += prefix + listOf("control", w.date, w.weight.toString(),
++            ((p.initialWeight - w.weight) / p.initialWeight * 100).toString())
++    }
++    return "\uFEFF" + rows.joinToString("\r\n") { row -> row.joinToString(";") { cell(it) } } + "\r\n"
++}
+diff --git a/app/src/main/java/com/example/climatecamera/ProductArchiveStore.kt b/app/src/main/java/com/example/climatecamera/ProductArchiveStore.kt
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ProductArchiveStore.kt
+@@ -0,0 +1,53 @@
++package com.example.climatecamera
++
++import android.content.ContentValues
++import android.content.Context
++import android.database.sqlite.SQLiteDatabase
++import android.database.sqlite.SQLiteOpenHelper
++
++/** SQLite commits are synchronous; a failed insert prevents the destructive network request. */
++internal class ProductArchiveStore private constructor(context: Context) : SQLiteOpenHelper(context.applicationContext, "product_archive.db", null, 1) {
++    companion object {
++        @Volatile private var instance: ProductArchiveStore? = null
++        fun get(context: Context): ProductArchiveStore = instance ?: synchronized(this) {
++            instance ?: ProductArchiveStore(context.applicationContext).also { instance = it }
++        }
++    }
++    override fun onCreate(db: SQLiteDatabase) {
++        db.execSQL("CREATE TABLE archive (archive_id TEXT PRIMARY KEY NOT NULL, camera_key TEXT NOT NULL, archived_at INTEGER NOT NULL, product_json TEXT NOT NULL, state TEXT NOT NULL, name TEXT NOT NULL, notes TEXT NOT NULL)")
++        db.execSQL("CREATE INDEX archive_camera ON archive(camera_key, archived_at)")
++    }
++    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
++        error("Неизвестная версия базы архива; автоматическое удаление запрещено")
++    }
++    fun insert(entry: ArchivedProduct) {
++        val values = ContentValues().apply {
++            put("archive_id", entry.archiveId); put("camera_key", entry.cameraKey)
++            put("archived_at", entry.archivedAt); put("product_json", ArchiveCodec.encode(entry.product))
++            put("state", entry.state.name); put("name", entry.name); put("notes", entry.notes)
++        }
++        writableDatabase.insertOrThrow("archive", null, values)
++    }
++    fun list(): List<ArchivedProduct> {
++        val result = mutableListOf<ArchivedProduct>()
++        readableDatabase.query("archive", null, null, null, null, null, "archived_at DESC, archive_id ASC").use { c ->
++            fun text(name: String) = c.getString(c.getColumnIndexOrThrow(name))
++            while (c.moveToNext()) result += ArchivedProduct(text("archive_id"), text("camera_key"),
++                c.getLong(c.getColumnIndexOrThrow("archived_at")), ArchiveCodec.decode(text("product_json")),
++                ArchiveState.valueOf(text("state")), text("name"), text("notes"))
++        }
++        return result
++    }
++    fun state(id: String, state: ArchiveState) {
++        val changed = writableDatabase.update("archive", ContentValues().apply { put("state", state.name) },
++            "archive_id = ?", arrayOf(id))
++        check(changed == 1) { "Запись архива не найдена" }
++    }
++    fun edit(id: String, name: String, notes: String) {
++        require(name.isNotBlank() && name.length <= 120 && notes.length <= 4000)
++        val changed = writableDatabase.update("archive", ContentValues().apply {
++            put("name", name.trim()); put("notes", notes)
++        }, "archive_id = ?", arrayOf(id))
++        check(changed == 1) { "Запись архива не найдена" }
++    }
++}
+diff --git a/app/src/main/java/com/example/climatecamera/ProductsScreen.kt b/app/src/main/java/com/example/climatecamera/ProductsScreen.kt
+--- a/app/src/main/java/com/example/climatecamera/ProductsScreen.kt
++++ b/app/src/main/java/com/example/climatecamera/ProductsScreen.kt
+@@ -16,6 +16,7 @@
+ import androidx.compose.ui.text.input.KeyboardType
+ import androidx.compose.ui.unit.dp
+ import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.NonCancellable
+ import kotlinx.coroutines.Dispatchers
+ import kotlinx.coroutines.launch
+ import kotlinx.coroutines.delay
+@@ -34,6 +35,7 @@
+     val settings = connection
+     val scope = rememberCoroutineScope()
+     val context = LocalContext.current
++    val archiveStore = remember(context) { ProductArchiveStore.get(context) }
+     var filterName by rememberSaveable { mutableStateOf(ProductFilter.ALL.name) }
+     var sortName by rememberSaveable { mutableStateOf(ProductSort.SLOT.name) }
+     var slotQuery by rememberSaveable { mutableStateOf("") }
+@@ -94,11 +96,19 @@
+         scope.launch {
+             var committed = false
+             try {
+-                withContext(Dispatchers.IO) { CameraTransport.mutate(settings, action, fields) }
++                val removalMessage = if (action == "remove") {
++                    val expected = remove ?: throw IOException("Выберите продукт заново")
++                    withContext(NonCancellable + Dispatchers.IO) {
++                        CameraTransport.archiveAndRemove(settings, expected, archiveStore)
++                    }
++                } else {
++                    withContext(Dispatchers.IO) { CameraTransport.mutate(settings, action, fields) }
++                    null
++                }
+                 message = when (action) {
+                     "add" -> "ESP32 подтвердил загрузку нового продукта."
+                     "weigh" -> "ESP32 подтвердил сохранение контрольного веса."
+-                    else -> "ESP32 подтвердил извлечение продукта и удаление его данных."
++                    else -> removalMessage.orEmpty()
+                 }
+                 committed = true
+                 editor = null
+@@ -288,9 +298,9 @@
+     }
+     remove?.let { product ->
+         AlertDialog(onDismissRequest = { if (!busy) remove = null }, title = { Text("Извлечь продукт №${product.id}?") }, text = {
+-            Text("Начальный вес и вся история будут удалены из памяти ESP32 без возможности отмены. При необходимости сначала сохраните CSV.")
++            Text("Сначала доступная история сохранится в локальном архиве телефона. Только после успешного сохранения приложение отправит команду освобождения слота ESP32. Архив не является резервной копией и может исчезнуть при удалении приложения. Данные на ESP32 удаляются без отмены.")
+         }, confirmButton = {
+-            TextButton(enabled = !writeBlocked, onClick = { mutate("remove", mapOf("id" to product.id.toString())) }) { Text("Удалить данные") }
++            TextButton(enabled = !writeBlocked, onClick = { mutate("remove", mapOf("id" to product.id.toString())) }) { Text("В архив и извлечь") }
+         }, dismissButton = { TextButton(enabled = !busy, onClick = { remove = null }) { Text("Отмена") } })
+     }
+ }
+diff --git a/app/src/main/res/xml/archive_file_paths.xml b/app/src/main/res/xml/archive_file_paths.xml
+--- /dev/null
++++ b/app/src/main/res/xml/archive_file_paths.xml
+@@ -0,0 +1,4 @@
++<?xml version="1.0" encoding="utf-8"?>
++<paths xmlns:android="http://schemas.android.com/apk/res/android">
++    <cache-path name="archive_exports" path="archive_exports/" />
++</paths>
+diff --git a/app/src/main/res/xml/backup_rules.xml b/app/src/main/res/xml/backup_rules.xml
+--- a/app/src/main/res/xml/backup_rules.xml
++++ b/app/src/main/res/xml/backup_rules.xml
+@@ -1 +1 @@
+-<?xml version="1.0" encoding="utf-8"?><full-backup-content><exclude domain="sharedpref" path="cc_connection.xml"/></full-backup-content>
+\ No newline at end of file
++<?xml version="1.0" encoding="utf-8"?><full-backup-content><exclude domain="sharedpref" path="cc_connection.xml"/><exclude domain="database" path="product_archive.db"/><exclude domain="database" path="product_archive.db-journal"/><exclude domain="database" path="product_archive.db-wal"/><exclude domain="database" path="product_archive.db-shm"/></full-backup-content>
+\ No newline at end of file
+diff --git a/app/src/main/res/xml/data_extraction_rules.xml b/app/src/main/res/xml/data_extraction_rules.xml
+--- a/app/src/main/res/xml/data_extraction_rules.xml
++++ b/app/src/main/res/xml/data_extraction_rules.xml
+@@ -1 +1 @@
+-<?xml version="1.0" encoding="utf-8"?><data-extraction-rules><cloud-backup><exclude domain="sharedpref" path="cc_connection.xml"/></cloud-backup><device-transfer><exclude domain="sharedpref" path="cc_connection.xml"/></device-transfer></data-extraction-rules>
+\ No newline at end of file
++<?xml version="1.0" encoding="utf-8"?><data-extraction-rules><cloud-backup><exclude domain="sharedpref" path="cc_connection.xml"/><exclude domain="database" path="product_archive.db"/><exclude domain="database" path="product_archive.db-journal"/><exclude domain="database" path="product_archive.db-wal"/><exclude domain="database" path="product_archive.db-shm"/></cloud-backup><device-transfer><exclude domain="sharedpref" path="cc_connection.xml"/><exclude domain="database" path="product_archive.db"/><exclude domain="database" path="product_archive.db-journal"/><exclude domain="database" path="product_archive.db-wal"/><exclude domain="database" path="product_archive.db-shm"/></device-transfer></data-extraction-rules>
+\ No newline at end of file
+diff --git a/app/src/test/java/com/example/climatecamera/ProductArchiveTest.kt b/app/src/test/java/com/example/climatecamera/ProductArchiveTest.kt
+--- /dev/null
++++ b/app/src/test/java/com/example/climatecamera/ProductArchiveTest.kt
+@@ -0,0 +1,69 @@
++package com.example.climatecamera
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class ProductArchiveTest {
++    private fun product() = Product(1, true, 1000.0, 38.0, "2026-10-20",
++        listOf(Weighing("2026-10-21", 900.0), Weighing("2026-10-22", 800.0)))
++    private fun entry() = ArchivePolicy.pending(ArchivePolicy.cameraKey("http://camera"), product())
++
++    @Test fun everyBatchHasIndependentId() {
++        assertNotEquals(entry().archiveId, entry().archiveId)
++    }
++    @Test fun sourceNormalization() {
++        assertEquals(ArchivePolicy.cameraKey("http://CAMERA/api/status/"), ArchivePolicy.cameraKey("http://camera:80/"))
++        assertEquals(ArchivePolicy.cameraKey("https://camera/"), ArchivePolicy.cameraKey("https://camera:443/api/status"))
++    }
++    @Test fun differentSourcesStaySeparate() {
++        assertNotEquals(ArchivePolicy.cameraKey("http://camera"), ArchivePolicy.cameraKey("https://camera"))
++        assertNotEquals(ArchivePolicy.cameraKey("http://camera:81"), ArchivePolicy.cameraKey("http://camera:80"))
++    }
++    @Test fun credentialsAndQueriesAreRejected() {
++        for (address in listOf("http://user:password@camera", "http://camera?token=secret", "http://camera#token", "ftp://camera")) {
++            try { ArchivePolicy.cameraKey(address); fail(address) } catch (_: IllegalArgumentException) { }
++        }
++    }
++    @Test fun snapshotDoesNotShareMutableHistory() {
++        val history = product().history.toMutableList()
++        val saved = ArchivePolicy.pending("camera", product().copy(history = history))
++        history.clear()
++        assertEquals(2, saved.product.history.size)
++    }
++    @Test fun codecRoundTripPreservesProduct() {
++        assertEquals(product(), ArchiveCodec.decode(ArchiveCodec.encode(product())))
++    }
++    @Test fun emptySlotIsObservationNotAcknowledgement() {
++        assertEquals(ArchiveState.EMPTY_OBSERVED, ArchivePolicy.observed(product(), product().copy(active = false)))
++    }
++    @Test fun unchangedAndChangedSlots() {
++        assertEquals(ArchiveState.STILL_PRESENT, ArchivePolicy.observed(product(), product()))
++        assertEquals(ArchiveState.SLOT_CHANGED, ArchivePolicy.observed(product(), product().copy(initialWeight = 1100.0)))
++    }
++    @Test fun pendingRejectsInvalidProduct() {
++        for (p in listOf(product().copy(active = false), product().copy(initialWeight = Double.NaN),
++            product().copy(startDate = "2026-02-30"), product().copy(id = 31), product().copy(targetLossPct = 0.0))) {
++            try { ArchivePolicy.pending("camera", p); fail("Invalid product accepted") } catch (_: IllegalArgumentException) { }
++        }
++    }
++    @Test fun csvHasBomHistoryAndEscapedCells() {
++        val csv = archiveCsv(listOf(entry().copy(name = "Сыр; \"тест\"", notes = "строка 1\nстрока 2")))
++        assertTrue(csv.startsWith("\uFEFF"))
++        assertTrue(csv.contains("initial"))
++        assertTrue(csv.contains("control"))
++        assertTrue(csv.contains("900.0"))
++        assertTrue(csv.contains("\"\"тест\"\""))
++    }
++    @Test fun csvNeutralizesFormulaCells() {
++        for (name in listOf("=1+1", " +1", "-2+3", "@SUM(A1)", "\t=1")) {
++            val csv = archiveCsv(listOf(entry().copy(name = name)))
++            assertTrue(csv.contains("\"'" + name))
++        }
++    }
++    @Test fun csvIsNotASecretContainer() {
++        val csv = archiveCsv(listOf(entry()))
++        assertFalse(csv.contains("http://camera"))
++        assertFalse(csv.contains("password"))
++        assertEquals(64, entry().cameraKey.length)
++    }
++}
+diff --git a/docs/ACCEPTANCE_v1.0.8_RU.md b/docs/ACCEPTANCE_v1.0.8_RU.md
+--- /dev/null
++++ b/docs/ACCEPTANCE_v1.0.8_RU.md
+@@ -0,0 +1,16 @@
++# Приёмка v1.0.8
++
++Проверяйте на отдельном тестовом продукте. Операция «Извлечь» удаляет данные слота на ESP32; предварительно сохраните историю через веб-интерфейс.
++
++1. Соберите приложение в Android Studio. Ожидаются успешные testDebugUnitTest и assembleDebug. Это обязательная проверка, не выполненная в среде подготовки.
++2. Без подключения откройте «Архив». Должен появиться пустой список либо ранее сохранённые копии, а не запрос сети.
++3. Войдите администратором, создайте тестовый продукт и внесите два контрольных веса. Запишите данные отдельно.
++4. Извлеките его с подтверждением. В архиве должны совпасть слот, дата, начальный вес, цель и обе записи; статус должен отдельно сообщать подтверждение ESP32. Проверьте пустой слот в веб-интерфейсе.
++5. Остановите подключение, закройте и откройте приложение. Архив должен остаться доступен. Отредактируйте название и многострочную заметку, перезапустите и проверьте сохранение.
++6. Сохраните и передайте CSV. Проверьте кириллицу, кавычки, точку с запятой и переносы строк в заметках. Первоначальный вес идёт отдельной строкой, каждый контрольный замер — своей. CSV не импортируется обратно.
++7. Войдите viewer: извлечение должно быть запрещено. Локальное чтение архива остаётся доступным.
++8. Для проверки тайм-аута используйте только тестовый продукт. При неподтверждённой операции не нажимайте извлечение повторно: откройте архив и выполните «Проверить слот на ESP32». Проверка читает, но не посылает команду. Сверьте результат через веб-интерфейс.
++9. При ошибке локального сохранения команда извлечения не должна отправляться. Этот сценарий требует отдельного Android-теста/отладки; JVM-тестами он не проверен.
++10. Убедитесь, что климат, настройки, добавление продукта, контрольное взвешивание и существующий CSV продуктов работают как прежде.
++
++Не используйте очистку данных и удаление приложения как способ исправления: это уничтожает локальный архив. Передайте при ошибке версию приложения, действие, полный текст ошибки сборки/интерфейса и ожидаемый результат, без паролей и токенов.
+diff --git a/verification/v1.0.8/jvm_compile.txt b/verification/v1.0.8/jvm_compile.txt
+--- /dev/null
++++ b/verification/v1.0.8/jvm_compile.txt
+@@ -0,0 +1 @@
++Kotlin JVM compilation exit code: 0
+diff --git a/verification/v1.0.8/jvm_tests.txt b/verification/v1.0.8/jvm_tests.txt
+--- /dev/null
++++ b/verification/v1.0.8/jvm_tests.txt
+@@ -0,0 +1,6 @@
++JUnit version 4.13.2
++................................................................
++Time: 0.114
++
++OK (64 tests)
++

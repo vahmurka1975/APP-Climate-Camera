@@ -51,6 +51,43 @@ internal object CameraTransport {
         data.optString("message", "Операция выполнена")
     }
 
+    /** Persist the exact freshly-read product before sending ONE destructive POST. */
+    fun archiveAndRemove(settings: ConnectionSettings, expected: Product, store: ProductArchiveStore): String = synchronized(lock) {
+        val status = request(settings, "/api/status")
+        if (status.optBoolean("readOnly", true)) throw IOException("Для извлечения нужен администратор")
+        if (status.optBoolean("otaInProgress", false) || status.optBoolean("localEditing", false)) {
+            throw IOException("ESP32 занят обновлением или локальным редактированием")
+        }
+        val token = status.optString("token")
+        if (token.isBlank()) throw IOException("Контроллер не выдал токен")
+        val current = ProductsSnapshot.fromJson(request(settings, "/api/products"), status)
+            .products.first { it.id == expected.id }
+        if (!current.active || current != expected) throw IOException("Данные продукта изменились. Обновите список и подтвердите извлечение заново")
+        val key = ArchivePolicy.cameraKey(settings.address)
+        if (store.list().any { it.cameraKey == key && it.product.id == current.id && it.state == ArchiveState.PENDING }) {
+            throw IOException("В архиве есть неподтверждённая попытка для этого слота. Сначала проверьте её во вкладке Архив")
+        }
+        val entry = ArchivePolicy.pending(key, current)
+        store.insert(entry) // If SQLite fails, no POST is sent.
+        try {
+            val reply = request(settings, "/api/products/remove", mapOf("id" to current.id.toString()), token)
+            if (!reply.optBoolean("ok", false)) throw IOException("ESP32 не подтвердил извлечение")
+            store.state(entry.archiveId, ArchiveState.ACKNOWLEDGED)
+        } catch (e: Exception) {
+            throw IOException("Копия сохранена в архиве. Результат извлечения не подтверждён: ${ConnectionPolicy.errorMessage(e)}. Не повторяйте команду; проверьте запись в архиве", e)
+        }
+        try {
+            val after = ProductsSnapshot.fromJson(request(settings, "/api/products"), request(settings, "/api/status"))
+            if (after.products.first { it.id == current.id }.active) {
+                "Копия в архиве; ESP32 подтвердил извлечение, но сейчас слот занят. Автоматического повтора нет"
+            } else {
+                "Копия сохранена в архиве. ESP32 подтвердил извлечение; при проверке слот пуст"
+            }
+        } catch (_: Exception) {
+            "Копия в архиве; ESP32 подтвердил извлечение. Повторное чтение не удалось; обновите список. Команда не повторяется"
+        }
+    }
+
     fun saveConfig(settings: ConnectionSettings, fields: Map<String, String>, baseline: Map<String, String>, save: Boolean): String = synchronized(lock) {
         if (fields.isEmpty()) throw IOException("Нет изменённых настроек")
         val status = request(settings, "/api/status")
