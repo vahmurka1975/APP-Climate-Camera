@@ -96,14 +96,7 @@ internal object CameraTransport {
             }.orEmpty()
             if (code !in 200..299) {
                 val detail = runCatching { JSONObject(text).optString("message") }.getOrDefault("")
-                val fallback = when (code) {
-                    401 -> "Неверный логин или пароль"
-                    403 -> "Доступ запрещён или токен устарел"
-                    404 -> "API не найден. Нужна прошивка с поддержкой продуктов"
-                    429 -> "Слишком много попыток входа. Подождите 60 секунд"
-                    in 300..399 -> "Перенаправление запрещено; укажите конечный адрес"
-                    else -> "Ошибка контроллера"
-                }
+                val fallback = ConnectionPolicy.httpFallback(code)
                 throw IOException("${detail.ifBlank { fallback }} (HTTP $code)")
             }
             return try { JSONObject(text) } catch (_: Exception) {

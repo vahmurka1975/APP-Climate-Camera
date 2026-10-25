@@ -77,7 +77,7 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
         if (busy) return
         busy = true
         scope.launch {
-            try { refresh(); error = null } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "Не удалось загрузить продукты" } finally { busy = false }
+            try { refresh(); error = null } catch (e: CancellationException) { throw e } catch (e: Exception) { error = ConnectionPolicy.errorMessage(e) } finally { busy = false }
         }
     }
     fun mutate(action: String, fields: Map<String, String>) {
@@ -103,8 +103,22 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
                 needsVerification = true
                 editor = null
                 remove = null
-                error = if (committed) "Изменение принято ESP32, но обновить список не удалось: ${e.message}. Нажмите «Обновить продукты». Не повторяйте запись."
-                else "${e.message}. Результат операции не подтверждён: запрос мог быть принят ESP32. Нажмите «Обновить продукты» и проверьте историю перед повтором. Автоматического повтора нет."
+                val failure = ConnectionPolicy.errorMessage(e)
+                // Read only: never repeat a POST after an uncertain response.
+                val reloaded = try {
+                    refresh()
+                    true
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                }
+                error = when {
+                    committed && reloaded -> "ESP32 подтвердил изменение. Список обновлён после ошибки чтения: $failure"
+                    committed -> "Изменение принято ESP32, но обновить список не удалось: $failure. Нажмите «Обновить продукты». Не повторяйте запись."
+                    reloaded -> "$failure. Список перечитан без повторной записи. Проверьте продукт и историю: само обновление списка не подтверждает выполнение операции."
+                    else -> "$failure. Результат операции не подтверждён. Нажмите «Обновить продукты» и проверьте историю перед повтором. Автоматического повтора нет."
+                }
             } finally { busy = false }
         }
     }
@@ -232,6 +246,7 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
 private fun ProductEditor(mode: String, product: Product, today: String, busy: Boolean, blocked: Boolean, onDismiss: () -> Unit, onSave: (Map<String, String>) -> Unit) {
     val context = LocalContext.current
     var weight by remember(mode, product.id) { mutableStateOf("") }
+    var pendingWeight by remember(mode, product.id) { mutableStateOf<Map<String, String>?>(null) }
     var date by remember(mode, product.id) { mutableStateOf(today) }
     var target by remember(mode, product.id) { mutableStateOf("38") }
     val parsedWeight = parseWeight(weight)
@@ -272,7 +287,28 @@ private fun ProductEditor(mode: String, product: Product, today: String, busy: B
                 (if (add) "initialWeight" else "weight") to parsedWeight.toString()
             )
             if (add) { fields["startDate"] = date; fields["targetLossPct"] = parsedTarget.toString() }
-            onSave(fields)
+            if (!add && parsedWeight != null &&
+                ConnectionPolicy.needsWeightConfirmation(parsedWeight, product.lastWeight)) {
+                pendingWeight = fields.toMap()
+            } else {
+                onSave(fields)
+            }
         }) { Text(if (busy) "Сохранение…" else "Сохранить") }
     }, dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Отмена") } })
+    pendingWeight?.let { fields ->
+        AlertDialog(
+            onDismissRequest = { if (!busy) pendingWeight = null },
+            title = { Text("Вес увеличился") },
+            text = { Text("Предыдущий вес: ${grams(product.lastWeight)} г. Новый: ${fields["weight"]} г. Сохранить увеличение веса?") },
+            confirmButton = {
+                TextButton(enabled = !busy && !blocked, onClick = {
+                    pendingWeight = null
+                    onSave(fields)
+                }) { Text("Сохранить вес") }
+            },
+            dismissButton = {
+                TextButton(enabled = !busy, onClick = { pendingWeight = null }) { Text("Проверить ввод") }
+            }
+        )
+    }
 }

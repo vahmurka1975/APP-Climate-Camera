@@ -1,0 +1,22 @@
+{
+  "version": "1.0.4",
+  "versionCode": 5,
+  "kotlinSyntax": {
+    "files": 14,
+    "errors": [],
+    "method": "tree-sitter-kotlin; syntax only, no type checking"
+  },
+  "xml": {
+    "files": 10,
+    "parsed": true
+  },
+  "java": null,
+  "androidSDK": null,
+  "androidBuild": "not run",
+  "jvmTests": "not run",
+  "phoneAndESP32Tests": "not run",
+  "githubModified": false,
+  "firmwareModified": false,
+  "persistentOfflineCacheAdded": false,
+  "base": "main downloaded 2026-10-25; commit hash not verified"
+}

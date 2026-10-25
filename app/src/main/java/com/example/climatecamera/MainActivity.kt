@@ -125,7 +125,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
             } catch (e: Exception) {
                 // Старые показания оставляем на экране,
                 // но явно сообщаем об ошибке обновления.
-                error = e.message ?: "Не удалось получить данные"
+                error = ConnectionPolicy.errorMessage(e)
             } finally {
                 loading = false
             }
@@ -234,6 +234,18 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 )
             }
         }
+
+        Text(
+            text = ConnectionPolicy.label(
+                connected = connection != null,
+                hasData = status != null,
+                failed = error != null,
+                stale = staleStatus
+            ),
+            color = if (connection != null && (error != null || staleStatus))
+                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+        )
+        if (receivedAt.isNotEmpty()) Text("Последний успешный ответ: $receivedAt")
 
         TabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })

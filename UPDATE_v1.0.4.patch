@@ -1,0 +1,214 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 4
+-        versionName = "1.0.3"
++        versionCode = 5
++        versionName = "1.0.4"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/app/src/main/java/com/example/climatecamera/CameraTransport.kt
++++ b/app/src/main/java/com/example/climatecamera/CameraTransport.kt
+@@ -96,14 +96,7 @@
+             }.orEmpty()
+             if (code !in 200..299) {
+                 val detail = runCatching { JSONObject(text).optString("message") }.getOrDefault("")
+-                val fallback = when (code) {
+-                    401 -> "Неверный логин или пароль"
+-                    403 -> "Доступ запрещён или токен устарел"
+-                    404 -> "API не найден. Нужна прошивка с поддержкой продуктов"
+-                    429 -> "Слишком много попыток входа. Подождите 60 секунд"
+-                    in 300..399 -> "Перенаправление запрещено; укажите конечный адрес"
+-                    else -> "Ошибка контроллера"
+-                }
++                val fallback = ConnectionPolicy.httpFallback(code)
+                 throw IOException("${detail.ifBlank { fallback }} (HTTP $code)")
+             }
+             return try { JSONObject(text) } catch (_: Exception) {
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ConnectionPolicy.kt
+@@ -0,0 +1,35 @@
++package com.example.climatecamera
++
++import java.net.ConnectException
++import java.net.SocketTimeoutException
++import java.net.UnknownHostException
++
++internal object ConnectionPolicy {
++    fun errorMessage(error: Exception): String = when (error) {
++        is UnknownHostException -> "Адрес камеры не найден. Проверьте адрес и подключение к сети камеры."
++        is SocketTimeoutException -> "Камера не ответила вовремя. Проверьте связь с ESP32."
++        is ConnectException -> "Не удалось подключиться к камере. Проверьте питание, адрес и сеть."
++        else -> error.message ?: "Не удалось получить данные камеры"
++    }
++
++    fun httpFallback(code: Int): String = when (code) {
++        401 -> "Неверный логин или пароль"
++        403 -> "Доступ запрещён или токен устарел"
++        404 -> "API не найден. Проверьте адрес и версию прошивки"
++        429 -> "Слишком много запросов. Подождите перед повторной попыткой"
++        in 300..399 -> "Перенаправление запрещено; укажите конечный адрес"
++        in 500..599 -> "Ошибка сервера ESP32. Повторите чтение данных позже"
++        else -> "Ошибка контроллера"
++    }
++
++    fun label(connected: Boolean, hasData: Boolean, failed: Boolean, stale: Boolean): String = when {
++        !connected -> "Обновление остановлено"
++        failed -> "Ошибка связи или доступа"
++        !hasData -> "Подключение к камере…"
++        stale -> "Данные не обновлены"
++        else -> "Камера доступна"
++    }
++
++    fun needsWeightConfirmation(weight: Double, previous: Double): Boolean =
++        weight.isFinite() && previous.isFinite() && weight > previous
++}
+--- a/app/src/main/java/com/example/climatecamera/MainActivity.kt
++++ b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+@@ -125,7 +125,7 @@
+             } catch (e: Exception) {
+                 // Старые показания оставляем на экране,
+                 // но явно сообщаем об ошибке обновления.
+-                error = e.message ?: "Не удалось получить данные"
++                error = ConnectionPolicy.errorMessage(e)
+             } finally {
+                 loading = false
+             }
+@@ -235,6 +235,18 @@
+             }
+         }
+ 
++        Text(
++            text = ConnectionPolicy.label(
++                connected = connection != null,
++                hasData = status != null,
++                failed = error != null,
++                stale = staleStatus
++            ),
++            color = if (connection != null && (error != null || staleStatus))
++                MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
++        )
++        if (receivedAt.isNotEmpty()) Text("Последний успешный ответ: $receivedAt")
++
+         TabRow(selectedTabIndex = selectedTab) {
+             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
+             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
+--- a/app/src/main/java/com/example/climatecamera/ProductsScreen.kt
++++ b/app/src/main/java/com/example/climatecamera/ProductsScreen.kt
+@@ -77,7 +77,7 @@
+         if (busy) return
+         busy = true
+         scope.launch {
+-            try { refresh(); error = null } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "Не удалось загрузить продукты" } finally { busy = false }
++            try { refresh(); error = null } catch (e: CancellationException) { throw e } catch (e: Exception) { error = ConnectionPolicy.errorMessage(e) } finally { busy = false }
+         }
+     }
+     fun mutate(action: String, fields: Map<String, String>) {
+@@ -103,8 +103,22 @@
+                 needsVerification = true
+                 editor = null
+                 remove = null
+-                error = if (committed) "Изменение принято ESP32, но обновить список не удалось: ${e.message}. Нажмите «Обновить продукты». Не повторяйте запись."
+-                else "${e.message}. Результат операции не подтверждён: запрос мог быть принят ESP32. Нажмите «Обновить продукты» и проверьте историю перед повтором. Автоматического повтора нет."
++                val failure = ConnectionPolicy.errorMessage(e)
++                // Read only: never repeat a POST after an uncertain response.
++                val reloaded = try {
++                    refresh()
++                    true
++                } catch (cancelled: CancellationException) {
++                    throw cancelled
++                } catch (_: Exception) {
++                    false
++                }
++                error = when {
++                    committed && reloaded -> "ESP32 подтвердил изменение. Список обновлён после ошибки чтения: $failure"
++                    committed -> "Изменение принято ESP32, но обновить список не удалось: $failure. Нажмите «Обновить продукты». Не повторяйте запись."
++                    reloaded -> "$failure. Список перечитан без повторной записи. Проверьте продукт и историю: само обновление списка не подтверждает выполнение операции."
++                    else -> "$failure. Результат операции не подтверждён. Нажмите «Обновить продукты» и проверьте историю перед повтором. Автоматического повтора нет."
++                }
+             } finally { busy = false }
+         }
+     }
+@@ -232,6 +246,7 @@
+ private fun ProductEditor(mode: String, product: Product, today: String, busy: Boolean, blocked: Boolean, onDismiss: () -> Unit, onSave: (Map<String, String>) -> Unit) {
+     val context = LocalContext.current
+     var weight by remember(mode, product.id) { mutableStateOf("") }
++    var pendingWeight by remember(mode, product.id) { mutableStateOf<Map<String, String>?>(null) }
+     var date by remember(mode, product.id) { mutableStateOf(today) }
+     var target by remember(mode, product.id) { mutableStateOf("38") }
+     val parsedWeight = parseWeight(weight)
+@@ -272,7 +287,28 @@
+                 (if (add) "initialWeight" else "weight") to parsedWeight.toString()
+             )
+             if (add) { fields["startDate"] = date; fields["targetLossPct"] = parsedTarget.toString() }
+-            onSave(fields)
++            if (!add && parsedWeight != null &&
++                ConnectionPolicy.needsWeightConfirmation(parsedWeight, product.lastWeight)) {
++                pendingWeight = fields.toMap()
++            } else {
++                onSave(fields)
++            }
+         }) { Text(if (busy) "Сохранение…" else "Сохранить") }
+     }, dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text("Отмена") } })
++    pendingWeight?.let { fields ->
++        AlertDialog(
++            onDismissRequest = { if (!busy) pendingWeight = null },
++            title = { Text("Вес увеличился") },
++            text = { Text("Предыдущий вес: ${grams(product.lastWeight)} г. Новый: ${fields["weight"]} г. Сохранить увеличение веса?") },
++            confirmButton = {
++                TextButton(enabled = !busy && !blocked, onClick = {
++                    pendingWeight = null
++                    onSave(fields)
++                }) { Text("Сохранить вес") }
++            },
++            dismissButton = {
++                TextButton(enabled = !busy, onClick = { pendingWeight = null }) { Text("Проверить ввод") }
++            }
++        )
++    }
+ }
+--- /dev/null
++++ b/app/src/test/java/com/example/climatecamera/ConnectionPolicyTest.kt
+@@ -0,0 +1,38 @@
++package com.example.climatecamera
++
++import org.junit.Assert.*
++import org.junit.Test
++import java.net.SocketTimeoutException
++import java.net.UnknownHostException
++
++class ConnectionPolicyTest {
++    @Test fun reportsInitialConnection() {
++        assertEquals("Подключение к камере…", ConnectionPolicy.label(true, false, false, true))
++    }
++    @Test fun failureTakesPriorityOverOldData() {
++        assertEquals("Ошибка связи или доступа", ConnectionPolicy.label(true, true, true, true))
++    }
++    @Test fun stoppedConnectionCannotLookLive() {
++        assertEquals("Обновление остановлено", ConnectionPolicy.label(false, true, false, false))
++    }
++    @Test fun freshDataLooksLive() {
++        assertEquals("Камера доступна", ConnectionPolicy.label(true, true, false, false))
++    }
++    @Test fun expiredDataIsMarked() {
++        assertEquals("Данные не обновлены", ConnectionPolicy.label(true, true, false, true))
++    }
++    @Test fun detectsNetworkFailures() {
++        assertTrue(ConnectionPolicy.errorMessage(SocketTimeoutException()).contains("вовремя"))
++        assertTrue(ConnectionPolicy.errorMessage(UnknownHostException()).contains("Адрес"))
++    }
++    @Test fun separatesHttpErrors() {
++        assertTrue(ConnectionPolicy.httpFallback(401).contains("пароль"))
++        assertTrue(ConnectionPolicy.httpFallback(503).contains("сервера"))
++    }
++    @Test fun confirmsOnlyFiniteIncrease() {
++        assertTrue(ConnectionPolicy.needsWeightConfirmation(1001.0, 1000.0))
++        assertFalse(ConnectionPolicy.needsWeightConfirmation(1000.0, 1000.0))
++        assertFalse(ConnectionPolicy.needsWeightConfirmation(900.0, 1000.0))
++        assertFalse(ConnectionPolicy.needsWeightConfirmation(Double.NaN, 1000.0))
++    }
++}
