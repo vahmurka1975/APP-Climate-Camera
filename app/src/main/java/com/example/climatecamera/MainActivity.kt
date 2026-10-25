@@ -100,7 +100,6 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
     var status by remember { mutableStateOf<CameraStatus?>(null) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var receivedAt by remember { mutableStateOf("") }
     var pollFailures by remember { mutableStateOf(0) }
     var nextPollMs by remember { mutableStateOf(5_000L) }
     var receivedElapsed by remember { mutableStateOf<Long?>(null) }
@@ -157,10 +156,6 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 receivedElapsed = SystemClock.elapsedRealtime()
                 elapsedNow = SystemClock.elapsedRealtime()
                 error = null
-                receivedAt = java.text.SimpleDateFormat(
-                    "HH:mm:ss",
-                    Locale.getDefault()
-                ).format(java.util.Date())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -198,16 +193,17 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                 Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            // Connection controls belong to Settings, not the live dashboard.
+            if (selectedTab == 2) {
             ConnectionBanner(
                 label = ConnectionPolicy.label(connection != null, status != null, error != null, staleStatus),
-                detail = when {
-                    connection == null && status != null -> "Обновление остановлено · показаны последние данные"
-                    connection == null -> "Укажите адрес камеры и подключитесь"
-                    loading && pollFailures > 0 -> "Повторное чтение данных…"
-                    pollFailures > 0 -> "Повторное чтение через интервал ${nextPollMs / 1000} с"
-                    receivedAt.isNotEmpty() -> "Последний ответ: $receivedAt"
-                    else -> "Ожидание первого ответа ESP32"
-                },
+                detail = ConnectionPresentation.detail(
+                    connected = connection != null,
+                    hasStatus = status != null,
+                    hasError = error != null,
+                    stale = staleStatus,
+                    ageSeconds = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
+                ),
                 warning = connection != null && (error != null || staleStatus),
                 active = connection != null && status != null && error == null && !staleStatus,
                 onClick = { connectionExpanded = !connectionExpanded },
@@ -275,7 +271,6 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                         if (connection == null) {
                             error = null
                             status = null
-                            receivedAt = ""
                             receivedElapsed = null
 
                             connection = ConnectionSettings(
@@ -309,7 +304,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
-            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } // Settings-only connection banner and form.
             error?.let { message ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                     modifier = Modifier.fillMaxWidth()) {
@@ -330,28 +325,25 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                             style = MaterialTheme.typography.titleLarge)
                         Text("После подключения здесь появятся температура, влажность и состояние оборудования.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (!connectionExpanded) TextButton(onClick = { connectionExpanded = true }) { Text("Открыть подключение") }
+                        TextButton(onClick = {
+                            selectedTab = 2
+                            connectionExpanded = true
+                        }) { Text("Открыть настройки подключения") }
                     }
                 }
             }
         if (selectedTab == 0) status?.let { data ->
-            val age = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
-            Text(
-                text = if (staleStatus)
-                    "УСТАРЕВШИЕ ДАННЫЕ · последнее получение: ${age ?: 0} с назад. Состояния реле и показания ниже не подтверждены текущим ответом ESP32."
-                else "Данные актуальны · получены ${age ?: 0} с назад",
-                color = if (staleStatus) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = if (connection == null) {
-                    "Обновление остановлено. Показаны последние данные."
-                } else if (error != null) {
-                    "Нет свежих данных. Показания могут быть устаревшими."
-                } else {
-                    "Последний успешный ответ: $receivedAt"
-                }
-            )
-
+            // Healthy freshness is shown only in Settings. Never hide stale/offline warnings.
+            if (staleStatus || connection == null) {
+                Text(
+                    text = when {
+                        connection == null -> "Обновление остановлено. Показаны последние данные; состояния оборудования не подтверждены."
+                        error != null -> "Нет свежих данных. Показаны последние значения; состояния оборудования не подтверждены."
+                        else -> "Данные устарели. Показания и состояния оборудования не подтверждены текущим ответом ESP32."
+                    },
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
 
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     if (maxWidth >= 480.dp && androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.3f) {

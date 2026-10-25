@@ -1,0 +1,194 @@
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 10
+-        versionName = "1.0.9"
++        versionCode = 11
++        versionName = "1.0.10"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/app/src/main/java/com/example/climatecamera/MainActivity.kt
++++ b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+@@ -100,7 +100,6 @@
+     var status by remember { mutableStateOf<CameraStatus?>(null) }
+     var loading by remember { mutableStateOf(false) }
+     var error by remember { mutableStateOf<String?>(null) }
+-    var receivedAt by remember { mutableStateOf("") }
+     var pollFailures by remember { mutableStateOf(0) }
+     var nextPollMs by remember { mutableStateOf(5_000L) }
+     var receivedElapsed by remember { mutableStateOf<Long?>(null) }
+@@ -157,10 +156,6 @@
+                 receivedElapsed = SystemClock.elapsedRealtime()
+                 elapsedNow = SystemClock.elapsedRealtime()
+                 error = null
+-                receivedAt = java.text.SimpleDateFormat(
+-                    "HH:mm:ss",
+-                    Locale.getDefault()
+-                ).format(java.util.Date())
+             } catch (e: CancellationException) {
+                 throw e
+             } catch (e: Exception) {
+@@ -198,16 +193,17 @@
+                 Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium,
+                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+             }
++            // Connection controls belong to Settings, not the live dashboard.
++            if (selectedTab == 2) {
+             ConnectionBanner(
+                 label = ConnectionPolicy.label(connection != null, status != null, error != null, staleStatus),
+-                detail = when {
+-                    connection == null && status != null -> "Обновление остановлено · показаны последние данные"
+-                    connection == null -> "Укажите адрес камеры и подключитесь"
+-                    loading && pollFailures > 0 -> "Повторное чтение данных…"
+-                    pollFailures > 0 -> "Повторное чтение через интервал ${nextPollMs / 1000} с"
+-                    receivedAt.isNotEmpty() -> "Последний ответ: $receivedAt"
+-                    else -> "Ожидание первого ответа ESP32"
+-                },
++                detail = ConnectionPresentation.detail(
++                    connected = connection != null,
++                    hasStatus = status != null,
++                    hasError = error != null,
++                    stale = staleStatus,
++                    ageSeconds = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
++                ),
+                 warning = connection != null && (error != null || staleStatus),
+                 active = connection != null && status != null && error == null && !staleStatus,
+                 onClick = { connectionExpanded = !connectionExpanded },
+@@ -275,7 +271,6 @@
+                         if (connection == null) {
+                             error = null
+                             status = null
+-                            receivedAt = ""
+                             receivedElapsed = null
+ 
+                             connection = ConnectionSettings(
+@@ -309,7 +304,7 @@
+                     }
+                 }
+             }
+-            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
++            } // Settings-only connection banner and form.
+             error?.let { message ->
+                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                     modifier = Modifier.fillMaxWidth()) {
+@@ -330,28 +325,25 @@
+                             style = MaterialTheme.typography.titleLarge)
+                         Text("После подключения здесь появятся температура, влажность и состояние оборудования.",
+                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+-                        if (!connectionExpanded) TextButton(onClick = { connectionExpanded = true }) { Text("Открыть подключение") }
++                        TextButton(onClick = {
++                            selectedTab = 2
++                            connectionExpanded = true
++                        }) { Text("Открыть настройки подключения") }
+                     }
+                 }
+             }
+         if (selectedTab == 0) status?.let { data ->
+-            val age = FreshnessPolicy.ageSeconds(receivedElapsed, elapsedNow)
+-            Text(
+-                text = if (staleStatus)
+-                    "УСТАРЕВШИЕ ДАННЫЕ · последнее получение: ${age ?: 0} с назад. Состояния реле и показания ниже не подтверждены текущим ответом ESP32."
+-                else "Данные актуальны · получены ${age ?: 0} с назад",
+-                color = if (staleStatus) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+-            )
+-            Text(
+-                text = if (connection == null) {
+-                    "Обновление остановлено. Показаны последние данные."
+-                } else if (error != null) {
+-                    "Нет свежих данных. Показания могут быть устаревшими."
+-                } else {
+-                    "Последний успешный ответ: $receivedAt"
+-                }
+-            )
+-
++            // Healthy freshness is shown only in Settings. Never hide stale/offline warnings.
++            if (staleStatus || connection == null) {
++                Text(
++                    text = when {
++                        connection == null -> "Обновление остановлено. Показаны последние данные; состояния оборудования не подтверждены."
++                        error != null -> "Нет свежих данных. Показаны последние значения; состояния оборудования не подтверждены."
++                        else -> "Данные устарели. Показания и состояния оборудования не подтверждены текущим ответом ESP32."
++                    },
++                    color = MaterialTheme.colorScheme.error
++                )
++            }
+ 
+                 BoxWithConstraints(Modifier.fillMaxWidth()) {
+                     if (maxWidth >= 480.dp && androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.3f) {
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ConnectionPresentation.kt
+@@ -0,0 +1,24 @@
++package com.example.climatecamera
++
++/** Text only: polling must not insert or remove a progress bar in the layout. */
++internal object ConnectionPresentation {
++    fun detail(
++        connected: Boolean,
++        hasStatus: Boolean,
++        hasError: Boolean,
++        stale: Boolean,
++        ageSeconds: Long?
++    ): String {
++        val age = ageSeconds?.let { "получены ${it.coerceAtLeast(0L)} с назад" }
++            ?: "время получения неизвестно"
++        return when {
++            !connected && hasStatus -> "Обновление остановлено · последние данные $age"
++            !connected -> "Укажите адрес камеры и подключитесь"
++            hasError && hasStatus -> "Ошибка обновления · последние данные $age"
++            hasError -> "Ошибка связи · первый ответ ESP32 не получен"
++            !hasStatus -> "Подключение · ожидание первого ответа ESP32"
++            stale -> "Данные устарели · $age"
++            else -> "Данные актуальны · $age"
++        }
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/example/climatecamera/ConnectionPresentationTest.kt
+@@ -0,0 +1,43 @@
++package com.example.climatecamera
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class ConnectionPresentationTest {
++    @Test fun freshDataIncludesAge() {
++        assertEquals("Данные актуальны · получены 3 с назад",
++            ConnectionPresentation.detail(true, true, false, false, 3L))
++    }
++    @Test fun expiredDataIsNeverCalledFresh() {
++        assertEquals("Данные устарели · получены 20 с назад",
++            ConnectionPresentation.detail(true, true, false, true, 20L))
++    }
++    @Test fun failureOverridesFreshness() {
++        assertEquals("Ошибка обновления · последние данные получены 1 с назад",
++            ConnectionPresentation.detail(true, true, true, false, 1L))
++    }
++    @Test fun stoppedPollingIsNotLiveEvenWithRecentData() {
++        assertEquals("Обновление остановлено · последние данные получены 0 с назад",
++            ConnectionPresentation.detail(false, true, false, false, 0L))
++    }
++    @Test fun initialConnectionWaitsForRealData() {
++        assertEquals("Подключение · ожидание первого ответа ESP32",
++            ConnectionPresentation.detail(true, false, false, true, null))
++    }
++    @Test fun disconnectedWithoutDataOffersSetup() {
++        assertEquals("Укажите адрес камеры и подключитесь",
++            ConnectionPresentation.detail(false, false, false, true, null))
++    }
++    @Test fun initialFailureHasNoFakeAge() {
++        assertEquals("Ошибка связи · первый ответ ESP32 не получен",
++            ConnectionPresentation.detail(true, false, true, true, null))
++    }
++    @Test fun missingAgeIsNotInvented() {
++        assertEquals("Данные устарели · время получения неизвестно",
++            ConnectionPresentation.detail(true, true, false, true, null))
++    }
++    @Test fun negativeAgeIsClamped() {
++        assertEquals("Данные актуальны · получены 0 с назад",
++            ConnectionPresentation.detail(true, true, false, false, -1L))
++    }
++}

@@ -1,0 +1,4 @@
+checking file app/build.gradle.kts
+checking file app/src/main/java/com/example/climatecamera/MainActivity.kt
+checking file app/src/main/java/com/example/climatecamera/ConnectionPresentation.kt
+checking file app/src/test/java/com/example/climatecamera/ConnectionPresentationTest.kt

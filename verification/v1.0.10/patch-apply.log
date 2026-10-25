@@ -1,0 +1,4 @@
+patching file app/build.gradle.kts
+patching file app/src/main/java/com/example/climatecamera/MainActivity.kt
+patching file app/src/main/java/com/example/climatecamera/ConnectionPresentation.kt
+patching file app/src/test/java/com/example/climatecamera/ConnectionPresentationTest.kt
