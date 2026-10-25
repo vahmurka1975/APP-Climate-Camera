@@ -178,6 +178,9 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
                                 else "Последний вес: ${grams(last.weight)} г · ${ProductDates.display(last.date)}")
                             Text("Усушка: ${grams(product.lossPct)} % · Цель: ${grams(product.targetLossPct)} %")
                             Text("Целевой вес: ${grams(product.targetWeight)} г")
+                            Text(if (product.remainingGrams > 0) "До цели осталось потерять: ${grams(product.remainingGrams)} г" else "Целевая усушка достигнута")
+                            LinearProgressIndicator(progress = { product.targetProgress.toFloat() }, modifier = Modifier.fillMaxWidth())
+                            Text("Достижение цели: ${grams(product.targetProgress * 100)} %", style = MaterialTheme.typography.bodySmall)
                             Text("Прогноз достижения цели: ${product.forecast()}")
                             Text("Прогноз по средней потере веса, не подтверждение безопасности или готовности к употреблению.", style = MaterialTheme.typography.bodySmall)
                             Button(enabled = !writeBlocked && !data.readOnly && ProductDates.valid(data.today) && product.history.size < 32, onClick = {
@@ -257,6 +260,7 @@ private fun ProductEditor(mode: String, product: Product, today: String, busy: B
                     enabled = !busy, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
             } else {
                 Text("Текущую дату записывает контроллер автоматически. Дата телефона в запрос не передаётся.")
+                if (parsedWeight != null && parsedWeight > product.lastWeight) Text("Вес выше предыдущего (${grams(product.lastWeight)} г). Проверьте измерение: увеличение допускается для исправления данных.", color = MaterialTheme.colorScheme.error)
                 if (parsedWeight != null && parsedWeight > product.initialWeight) Text("Вес выше начального: усушка будет отрицательной. Проверьте введённое значение.")
             }
         }

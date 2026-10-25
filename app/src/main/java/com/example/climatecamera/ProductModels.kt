@@ -19,6 +19,8 @@ internal data class Product(
     val lastWeight: Double get() = history.lastOrNull()?.weight ?: initialWeight
     val lossPct: Double get() = if (initialWeight > 0) (initialWeight - lastWeight) / initialWeight * 100 else 0.0
     val targetWeight: Double get() = initialWeight * (1 - targetLossPct / 100)
+    val remainingGrams: Double get() = (lastWeight - targetWeight).coerceAtLeast(0.0)
+    val targetProgress: Double get() = if (targetLossPct > 0) (lossPct / targetLossPct).coerceIn(0.0, 1.0) else 0.0
     fun forecast(): String {
         if (history.isEmpty()) return "Нужно контрольное взвешивание"
         if (lastWeight <= targetWeight) return "Целевая усушка достигнута"

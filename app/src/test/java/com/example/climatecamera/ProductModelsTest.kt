@@ -4,6 +4,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProductModelsTest {
+    @Test fun computesRemainingAndClampsProgress() {
+        val p = Product(1, true, 1000.0, 38.0, "2026-10-01", listOf(Weighing("2026-10-11", 800.0)))
+        assertEquals(180.0, p.remainingGrams, 0.001)
+        assertEquals(20.0 / 38.0, p.targetProgress, 0.001)
+        val done = p.copy(history = listOf(Weighing("2026-10-11", 600.0)))
+        assertEquals(0.0, done.remainingGrams, 0.001)
+        assertEquals(1.0, done.targetProgress, 0.001)
+        val increased = p.copy(history = listOf(Weighing("2026-10-11", 1100.0)))
+        assertEquals(0.0, increased.targetProgress, 0.001)
+    }
+    @Test fun rejectsNegativeAndAcceptsDot() {
+        assertNull(parseWeight("-1"))
+        assertEquals(1250.5, parseWeight("1250.5")!!, 0.001)
+    }
     @Test fun acceptsRussianDecimalSeparator() {
         assertEquals(1250.5, parseWeight("1250,5")!!, 0.001)
         assertNull(parseWeight("NaN"))
