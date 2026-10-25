@@ -43,10 +43,7 @@ internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
     fun requestRefresh() {
         busy = true
         scope.launch {
-            try { refresh(); message = "Настройки перечитаны с ESP32" }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) }
-            finally { busy = false }
+            try { refresh(); message = "Настройки перечитаны с ESP32" } catch (e: CancellationException) { throw e } catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) } finally { busy = false }
         }
     }
     LaunchedEffect(connection) {
@@ -110,8 +107,7 @@ internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
                                 }
                                 lastReadError = null
                                 if (lastDifferences.isEmpty()) { matched = true; break }
-                            } catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { lastReadError = ConnectionPolicy.errorMessage(e) }
+                            } catch (e: CancellationException) { throw e } catch (e: Exception) { lastReadError = ConnectionPolicy.errorMessage(e) }
                             if (attempt < ReadbackPolicy.MAX_ATTEMPTS) delay(ReadbackPolicy.RETRY_DELAY_MS)
                         }
                         if (matched) {

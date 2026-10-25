@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,6 +34,11 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
     val settings = connection
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var filterName by rememberSaveable { mutableStateOf(ProductFilter.ALL.name) }
+    var sortName by rememberSaveable { mutableStateOf(ProductSort.SLOT.name) }
+    var slotQuery by rememberSaveable { mutableStateOf("") }
+    var filterMenu by remember { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
     var snapshot by remember { mutableStateOf<ProductsSnapshot?>(null) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -178,7 +184,54 @@ internal fun ProductsScreen(connection: ConnectionSettings?) {
                 exportText = productsCsv(data)
                 exporter.launch("ClimateCamera_products_${data.today.ifBlank { "history" }}.csv")
             }) { Text("Экспорт истории в CSV") }
-            data.products.forEach { product ->
+            val activeCount = data.products.count { it.active }
+            val reachedCount = data.products.count {
+                it.active && it.initialWeight > 0 && it.lastWeight <= it.targetWeight
+            }
+            Text("Занято: $activeCount / ${data.products.size} · Свободно: ${data.products.size - activeCount}")
+            Text("Целевая усушка достигнута: $reachedCount. Это не подтверждает готовность к употреблению.",
+                style = MaterialTheme.typography.bodySmall)
+            val currentFilter = ProductFilter.values().firstOrNull { it.name == filterName } ?: ProductFilter.ALL
+            val currentSort = ProductSort.values().firstOrNull { it.name == sortName } ?: ProductSort.SLOT
+            OutlinedTextField(
+                value = slotQuery,
+                onValueChange = { slotQuery = it.filter { char -> char in '0'..'9' }.take(2) },
+                label = { Text("Номер слота (1–30)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Box {
+                OutlinedButton(onClick = { filterMenu = true }) { Text("Фильтр: ${currentFilter.label}") }
+                DropdownMenu(expanded = filterMenu, onDismissRequest = { filterMenu = false }) {
+                    ProductFilter.values().forEach { option ->
+                        DropdownMenuItem(text = { Text(option.label) }, onClick = {
+                            filterName = option.name; filterMenu = false
+                        })
+                    }
+                }
+            }
+            Box {
+                OutlinedButton(onClick = { sortMenu = true }) { Text("Порядок: ${currentSort.label}") }
+                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    ProductSort.values().forEach { option ->
+                        DropdownMenuItem(text = { Text(option.label) }, onClick = {
+                            sortName = option.name; sortMenu = false
+                        })
+                    }
+                }
+            }
+            val visibleProducts = ProductListPolicy.select(data.products, currentFilter, currentSort, slotQuery)
+            Text("Показано: ${visibleProducts.size} из ${data.products.size}")
+            if (currentFilter != ProductFilter.ALL || currentSort != ProductSort.SLOT || slotQuery.isNotEmpty()) {
+                TextButton(onClick = {
+                    filterName = ProductFilter.ALL.name; sortName = ProductSort.SLOT.name; slotQuery = ""
+                }) { Text("Сбросить фильтры и порядок") }
+            }
+            if (visibleProducts.isEmpty()) Text("Нет слотов по выбранным условиям. Измените фильтр или номер.")
+            Text("Экспорт CSV выше сохраняет все активные продукты, независимо от фильтра.",
+                style = MaterialTheme.typography.bodySmall)
+            visibleProducts.forEach { product ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text("Продукт №${product.id}", style = MaterialTheme.typography.titleMedium)
