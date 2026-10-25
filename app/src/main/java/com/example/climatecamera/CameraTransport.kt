@@ -51,6 +51,25 @@ internal object CameraTransport {
         data.optString("message", "Операция выполнена")
     }
 
+    fun saveConfig(settings: ConnectionSettings, fields: Map<String, String>, baseline: Map<String, String>, save: Boolean): String = synchronized(lock) {
+        if (fields.isEmpty()) throw IOException("Нет изменённых настроек")
+        val status = request(settings, "/api/status")
+        if (status.optBoolean("readOnly", true)) throw IOException("Нужны права администратора")
+        if (status.optBoolean("otaMode") || status.optBoolean("uiEditing")) throw IOException("Активно OTA или локальное редактирование")
+        val token = status.optString("token")
+        if (token.isBlank()) throw IOException("Контроллер не выдал токен")
+        val config = status.getJSONObject("config")
+        for ((key, _) in fields) {
+            val field = CameraConfigFields.all.firstOrNull { it.key == key } ?: throw IOException("Неизвестное поле")
+            if (field.normalized(fields.getValue(key)) == null) throw IOException("Некорректное значение: ${field.label}")
+            val old = baseline[key]?.toDoubleOrNull() ?: throw IOException("Перечитайте форму")
+            if (!config.getDouble(key).isFinite() || kotlin.math.abs(config.getDouble(key) - old) > 0.00001) throw IOException("Настройки уже изменены другим клиентом. Перечитайте форму")
+        }
+        val reply = request(settings, "/api/config", fields + ("save" to if (save) "1" else "0"), token)
+        if (!reply.optBoolean("ok", false)) throw IOException(reply.optString("message", "Изменение отклонено"))
+        reply.optString("message", "Настройки применены")
+    }
+
     private fun request(settings: ConnectionSettings, path: String, fields: Map<String, String>? = null, token: String = ""): JSONObject {
         val base = settings.address.trim().trimEnd('/').removeSuffix("/api/status")
         val url = try { URL(base + path) } catch (_: Exception) {

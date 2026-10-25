@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.example.climatecamera.ui.theme.ClimateCameraTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -82,7 +84,7 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
     }
     var username by rememberSaveable { mutableStateOf("") }
 
-    // Пароль не записывается в постоянное хранилище.
+    // Пароль сохраняется только по явному согласию пользователя.
     var password by remember { mutableStateOf("") }
 
     var connection by remember {
@@ -104,6 +106,32 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
         receivedElapsed, elapsedNow, FreshnessPolicy.STATUS_MAX_AGE_MS
     )
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    val context = LocalContext.current
+    val store = remember(context) { ConnectionStore(context) }
+    var rememberPassword by remember { mutableStateOf(false) }
+    var storageMessage by remember { mutableStateOf("") }
+    LaunchedEffect(store) {
+        try {
+            val saved = withContext(Dispatchers.IO) { store.load() }
+            if (saved != null) {
+                address = saved.address
+                username = saved.username
+                password = saved.password
+                rememberPassword = saved.rememberPassword
+            }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            storageMessage = "Не удалось прочитать подключение. Можно ввести данные заново или удалить сохранённые."
+        }
+    }
+    LaunchedEffect(connection, rememberPassword) {
+        val settings = connection ?: return@LaunchedEffect
+        while (status == null) delay(100)
+        try {
+            withContext(Dispatchers.IO) { store.save(settings, rememberPassword) }
+            storageMessage = if (rememberPassword) "Подключение и пароль сохранены на устройстве" else "Адрес и логин сохранены; пароль не сохраняется"
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { storageMessage = "Не удалось сохранить подключение. Данные доступны только до закрытия приложения." }
+    }
+
 
     LaunchedEffect(connection) {
         val settings = connection ?: return@LaunchedEffect
@@ -197,6 +225,23 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Row {
+                    Checkbox(checked = rememberPassword,
+                        onCheckedChange = { rememberPassword = it }, enabled = connection == null)
+                    Text("Запомнить пароль на этом устройстве")
+                }
+                Text("Для удалённого доступа используйте VPN или HTTPS. Обычный HTTP не шифрует пароль при передаче.")
+                if (storageMessage.isNotBlank()) Text(storageMessage)
+                val storageScope = rememberCoroutineScope()
+                TextButton(enabled = connection == null, onClick = {
+                    storageScope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { store.clear() }
+                            address = ""; username = ""; password = ""; rememberPassword = false
+                            storageMessage = "Сохранённое подключение удалено"
+                        } catch (e: CancellationException) { throw e } catch (e: Exception) { storageMessage = "Не удалось удалить сохранённое подключение" }
+                    }
+                }) { Text("Забыть подключение") }
                 Button(
                     onClick = {
                         if (connection == null) {
@@ -250,6 +295,10 @@ private fun ClimateScreen(modifier: Modifier = Modifier) {
         TabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
+            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Настройки") })
+        }
+        if (selectedTab == 2) {
+            key(connection) { CameraSettingsScreen(connection) }
         }
         if (selectedTab == 1) {
             key(connection) { ProductsScreen(connection) }

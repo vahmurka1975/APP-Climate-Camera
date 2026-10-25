@@ -1,0 +1,389 @@
+--- a/app/src/main/java/com/example/climatecamera/MainActivity.kt
++++ b/app/src/main/java/com/example/climatecamera/MainActivity.kt
+@@ -12,6 +12,7 @@
+ import androidx.compose.material3.*
+ import androidx.compose.runtime.*
+ import androidx.compose.runtime.saveable.rememberSaveable
++import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.text.input.KeyboardType
+ import androidx.compose.ui.text.input.PasswordVisualTransformation
+@@ -19,6 +20,7 @@
+ import com.example.climatecamera.ui.theme.ClimateCameraTheme
+ import kotlinx.coroutines.CancellationException
+ import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.launch
+ import kotlinx.coroutines.delay
+ import kotlinx.coroutines.withContext
+ import org.json.JSONObject
+@@ -82,7 +84,7 @@
+     }
+     var username by rememberSaveable { mutableStateOf("") }
+ 
+-    // Пароль не записывается в постоянное хранилище.
++    // Пароль сохраняется только по явному согласию пользователя.
+     var password by remember { mutableStateOf("") }
+ 
+     var connection by remember {
+@@ -104,6 +106,32 @@
+         receivedElapsed, elapsedNow, FreshnessPolicy.STATUS_MAX_AGE_MS
+     )
+     var selectedTab by rememberSaveable { mutableStateOf(0) }
++    val context = LocalContext.current
++    val store = remember(context) { ConnectionStore(context) }
++    var rememberPassword by remember { mutableStateOf(false) }
++    var storageMessage by remember { mutableStateOf("") }
++    LaunchedEffect(store) {
++        try {
++            val saved = withContext(Dispatchers.IO) { store.load() }
++            if (saved != null) {
++                address = saved.address
++                username = saved.username
++                password = saved.password
++                rememberPassword = saved.rememberPassword
++            }
++        } catch (e: CancellationException) { throw e } catch (e: Exception) {
++            storageMessage = "Не удалось прочитать подключение. Можно ввести данные заново или удалить сохранённые."
++        }
++    }
++    LaunchedEffect(connection, rememberPassword) {
++        val settings = connection ?: return@LaunchedEffect
++        while (status == null) delay(100)
++        try {
++            withContext(Dispatchers.IO) { store.save(settings, rememberPassword) }
++            storageMessage = if (rememberPassword) "Подключение и пароль сохранены на устройстве" else "Адрес и логин сохранены; пароль не сохраняется"
++        } catch (e: CancellationException) { throw e } catch (e: Exception) { storageMessage = "Не удалось сохранить подключение. Данные доступны только до закрытия приложения." }
++    }
++
+ 
+     LaunchedEffect(connection) {
+         val settings = connection ?: return@LaunchedEffect
+@@ -197,6 +225,23 @@
+                     modifier = Modifier.fillMaxWidth()
+                 )
+ 
++                Row {
++                    Checkbox(checked = rememberPassword,
++                        onCheckedChange = { rememberPassword = it }, enabled = connection == null)
++                    Text("Запомнить пароль на этом устройстве")
++                }
++                Text("Для удалённого доступа используйте VPN или HTTPS. Обычный HTTP не шифрует пароль при передаче.")
++                if (storageMessage.isNotBlank()) Text(storageMessage)
++                val storageScope = rememberCoroutineScope()
++                TextButton(enabled = connection == null, onClick = {
++                    storageScope.launch {
++                        try {
++                            withContext(Dispatchers.IO) { store.clear() }
++                            address = ""; username = ""; password = ""; rememberPassword = false
++                            storageMessage = "Сохранённое подключение удалено"
++                        } catch (e: CancellationException) { throw e } catch (e: Exception) { storageMessage = "Не удалось удалить сохранённое подключение" }
++                    }
++                }) { Text("Забыть подключение") }
+                 Button(
+                     onClick = {
+                         if (connection == null) {
+@@ -250,6 +295,10 @@
+         TabRow(selectedTabIndex = selectedTab) {
+             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Климат") })
+             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Продукты") })
++            Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Настройки") })
++        }
++        if (selectedTab == 2) {
++            key(connection) { CameraSettingsScreen(connection) }
+         }
+         if (selectedTab == 1) {
+             key(connection) { ProductsScreen(connection) }
+--- a/app/src/main/java/com/example/climatecamera/CameraTransport.kt
++++ b/app/src/main/java/com/example/climatecamera/CameraTransport.kt
+@@ -49,6 +49,25 @@
+         val data = request(settings, "/api/products/$action", fields, token)
+         if (!data.optBoolean("ok", false)) throw IOException(data.optString("message", "Операция отклонена"))
+         data.optString("message", "Операция выполнена")
++    }
++
++    fun saveConfig(settings: ConnectionSettings, fields: Map<String, String>, baseline: Map<String, String>, save: Boolean): String = synchronized(lock) {
++        if (fields.isEmpty()) throw IOException("Нет изменённых настроек")
++        val status = request(settings, "/api/status")
++        if (status.optBoolean("readOnly", true)) throw IOException("Нужны права администратора")
++        if (status.optBoolean("otaMode") || status.optBoolean("uiEditing")) throw IOException("Активно OTA или локальное редактирование")
++        val token = status.optString("token")
++        if (token.isBlank()) throw IOException("Контроллер не выдал токен")
++        val config = status.getJSONObject("config")
++        for ((key, _) in fields) {
++            val field = CameraConfigFields.all.firstOrNull { it.key == key } ?: throw IOException("Неизвестное поле")
++            if (field.normalized(fields.getValue(key)) == null) throw IOException("Некорректное значение: ${field.label}")
++            val old = baseline[key]?.toDoubleOrNull() ?: throw IOException("Перечитайте форму")
++            if (!config.getDouble(key).isFinite() || kotlin.math.abs(config.getDouble(key) - old) > 0.00001) throw IOException("Настройки уже изменены другим клиентом. Перечитайте форму")
++        }
++        val reply = request(settings, "/api/config", fields + ("save" to if (save) "1" else "0"), token)
++        if (!reply.optBoolean("ok", false)) throw IOException(reply.optString("message", "Изменение отклонено"))
++        reply.optString("message", "Настройки применены")
+     }
+ 
+     private fun request(settings: ConnectionSettings, path: String, fields: Map<String, String>? = null, token: String = ""): JSONObject {
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/CameraSettingsScreen.kt
+@@ -0,0 +1,92 @@
++package com.example.climatecamera
++
++import androidx.compose.foundation.layout.*
++import androidx.compose.foundation.text.KeyboardOptions
++import androidx.compose.material3.*
++import androidx.compose.runtime.*
++import androidx.compose.ui.Modifier
++import androidx.compose.ui.text.input.KeyboardType
++import androidx.compose.ui.unit.dp
++import kotlinx.coroutines.CancellationException
++import kotlinx.coroutines.Dispatchers
++import kotlinx.coroutines.launch
++import kotlinx.coroutines.withContext
++
++@Composable
++internal fun CameraSettingsScreen(connection: ConnectionSettings?) {
++    if (connection == null) { Text("Подключитесь к камере для просмотра настроек."); return }
++    val scope = rememberCoroutineScope()
++    var values by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
++    var baseline by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
++    var readOnly by remember { mutableStateOf(true) }
++    var busy by remember { mutableStateOf(false) }
++    var verified by remember { mutableStateOf(false) }
++    var saveNvs by remember { mutableStateOf(true) }
++    var message by remember { mutableStateOf("") }
++    var pending by remember { mutableStateOf<Map<String, String>?>(null) }
++    suspend fun refresh() {
++        verified = false
++        val status = withContext(Dispatchers.IO) { CameraTransport.status(connection) }
++        readOnly = status.optBoolean("readOnly", true)
++        val config = status.getJSONObject("config")
++        val loaded = CameraConfigFields.all.associate { field ->
++            val number = config.getDouble(field.key)
++            check(number.isFinite()) { "Некорректный ответ ESP32" }
++            field.key to (if (field.integer) number.toInt().toString() else number.toString())
++        }
++        values = loaded; baseline = loaded
++        verified = !status.optBoolean("otaMode") && !status.optBoolean("uiEditing")
++    }
++    LaunchedEffect(connection) {
++        busy = true
++        try { refresh() } catch (e: CancellationException) { throw e } catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) } finally { busy = false }
++    }
++    val normalized = CameraConfigFields.all.associate { it.key to it.normalized(values[it.key].orEmpty()) }
++    val changed = normalized.filter { (key, value) -> value != null && value.toDoubleOrNull() != baseline[key]?.toDoubleOrNull() }
++        .mapValues { it.value!! }
++    val editable = verified && !readOnly && !busy
++    Text("Настройки камеры", style = MaterialTheme.typography.titleLarge)
++    Text(if (readOnly) "Режим просмотра. Для редактирования подключитесь с правами администратора." else "Администратор · права подтверждены ESP32")
++    if (!verified) Text("Изменение заблокировано. Обновите форму; завершите OTA или локальное редактирование, если они активны.")
++    Button(enabled = !busy, onClick = {
++        busy = true
++        scope.launch {
++            try { refresh(); message = "Настройки перечитаны с ESP32" } catch (e: CancellationException) { throw e } catch (e: Exception) { message = ConnectionPolicy.errorMessage(e) } finally { busy = false }
++        }
++    }) { Text("Обновить форму (сбросить несохранённые изменения)") }
++    CameraConfigFields.all.forEach { field ->
++        val value = values[field.key].orEmpty()
++        val invalid = values.isNotEmpty() && field.normalized(value) == null
++        OutlinedTextField(value = value, onValueChange = { values = values + (field.key to it) },
++            label = { Text(field.label) }, enabled = editable, isError = invalid,
++            supportingText = { Text("${field.min} … ${field.max}" + if (field.integer) "; целое число" else "; точка или запятая") },
++            singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
++            modifier = Modifier.fillMaxWidth())
++    }
++    Row { Checkbox(checked = saveNvs, onCheckedChange = { saveNvs = it }, enabled = editable); Text("Сохранить в память ESP32 (NVS)") }
++    Button(enabled = editable && normalized.values.none { it == null } && changed.isNotEmpty(), onClick = { pending = changed.toMap() }) {
++        Text(if (busy) "Выполняется…" else "Применить настройки")
++    }
++    if (message.isNotBlank()) Text(message)
++    pending?.let { fields ->
++        AlertDialog(onDismissRequest = { pending = null }, title = { Text("Подтвердить изменение?") },
++            text = { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
++                CameraConfigFields.all.filter { it.key in fields }.forEach { Text("${it.label}: ${baseline[it.key]} → ${fields[it.key]}") }
++                Text(if (saveNvs) "С сохранением в NVS" else "Без сохранения в NVS; после перезапуска значения могут сброситься")
++            } },
++            dismissButton = { TextButton(onClick = { pending = null }) { Text("Отмена") } },
++            confirmButton = { TextButton(onClick = {
++                pending = null; busy = true; verified = false
++                scope.launch {
++                    try {
++                        val reply = withContext(Dispatchers.IO) { CameraTransport.saveConfig(connection, fields, baseline, saveNvs) }
++                        message = reply
++                        try { refresh(); message = "$reply. Текущие значения перечитаны с ESP32." } catch (e: CancellationException) { throw e } catch (e: Exception) { verified = false; message = "$reply. Не удалось перечитать значения: ${ConnectionPolicy.errorMessage(e)}" }
++                    } catch (e: CancellationException) { throw e } catch (e: Exception) {
++                        verified = false
++                        message = "${ConnectionPolicy.errorMessage(e)}. Если запрос был отправлен, изменение могло выполниться. Автоматического повтора нет: перечитайте форму и проверьте значения."
++                    } finally { busy = false }
++                }
++            }) { Text("Подтвердить") } })
++    }
++}
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/CameraConfigModels.kt
+@@ -0,0 +1,24 @@
++package com.example.climatecamera
++
++internal data class ConfigField(val key: String, val label: String, val min: Double, val max: Double, val integer: Boolean = false) {
++    fun normalized(text: String): String? {
++        val value = text.trim().replace(',', '.').toDoubleOrNull() ?: return null
++        if (!value.isFinite() || value < min || value > max || (integer && value % 1.0 != 0.0)) return null
++        return if (integer) value.toInt().toString() else value.toString()
++    }
++}
++internal object CameraConfigFields {
++    val all = listOf(
++        ConfigField("tempTarget", "Температура, °C", 2.0, 30.0),
++        ConfigField("tempHyst", "Гистерезис температуры, °C", 0.2, 5.0),
++        ConfigField("humTarget", "Влажность, %", 30.0, 98.0),
++        ConfigField("humHyst", "Гистерезис влажности, %", 1.0, 10.0),
++        ConfigField("fanWorkMin", "Работа вентилятора, мин", 1.0, 180.0, true),
++        ConfigField("fanPauseMin", "Пауза вентилятора, мин (0 — непрерывно)", 0.0, 360.0, true),
++        ConfigField("fanTargetRPM", "Обороты вентилятора, об/мин", 300.0, 1500.0, true),
++        ConfigField("tempOffset", "Поправка температуры, °C", -5.0, 5.0),
++        ConfigField("humOffset", "Поправка влажности, %", -15.0, 15.0),
++        ConfigField("pidKp", "ПИ-регулятор: Kp", 0.0, 1.0),
++        ConfigField("pidKi", "ПИ-регулятор: Ki", 0.0, 1.0)
++    )
++}
+--- /dev/null
++++ b/app/src/main/java/com/example/climatecamera/ConnectionStore.kt
+@@ -0,0 +1,52 @@
++package com.example.climatecamera
++
++import android.content.Context
++import android.security.keystore.KeyGenParameterSpec
++import android.security.keystore.KeyProperties
++import android.util.Base64
++import org.json.JSONObject
++import java.security.KeyStore
++import javax.crypto.Cipher
++import javax.crypto.KeyGenerator
++import javax.crypto.SecretKey
++import javax.crypto.spec.GCMParameterSpec
++
++internal data class SavedConnection(val address: String, val username: String, val password: String, val rememberPassword: Boolean)
++
++/** Device-local encrypted connection, excluded from backup. Never stores the API token. */
++internal class ConnectionStore(context: Context) {
++    private val prefs = context.applicationContext.getSharedPreferences("cc_connection", Context.MODE_PRIVATE)
++    private val alias = "cc_connection_v105"
++    private fun key(): SecretKey {
++        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
++        (store.getKey(alias, null) as? SecretKey)?.let { return it }
++        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
++            init(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
++                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
++                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
++        }.generateKey()
++    }
++    fun load(): SavedConnection? {
++        val blob = prefs.getString("blob", null) ?: return null
++        val parts = blob.split(":")
++        require(parts.size == 2) { "Повреждено сохранённое подключение" }
++        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
++        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP)))
++        val json = JSONObject(String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), Charsets.UTF_8))
++        val remember = json.optBoolean("rememberPassword", false)
++        return SavedConnection(json.getString("address"), json.getString("username"), if (remember) json.optString("password") else "", remember)
++    }
++    fun save(settings: ConnectionSettings, rememberPassword: Boolean) {
++        val json = JSONObject().put("address", settings.address).put("username", settings.username)
++            .put("rememberPassword", rememberPassword).put("password", if (rememberPassword) settings.password else "")
++        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
++        cipher.init(Cipher.ENCRYPT_MODE, key())
++        val bytes = cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
++        check(prefs.edit().putString("blob", Base64.encodeToString(cipher.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(bytes, Base64.NO_WRAP)).commit()) { "Не удалось сохранить подключение" }
++    }
++    fun clear() {
++        check(prefs.edit().clear().commit()) { "Не удалось удалить подключение" }
++        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
++        if (store.containsAlias(alias)) store.deleteEntry(alias)
++    }
++}
+--- /dev/null
++++ b/app/src/test/java/com/example/climatecamera/CameraConfigModelsTest.kt
+@@ -0,0 +1,25 @@
++package com.example.climatecamera
++
++import org.junit.Assert.*
++import org.junit.Test
++
++class CameraConfigModelsTest {
++    @Test fun boundsAndDecimals() {
++        val t = CameraConfigFields.all.first { it.key == "tempTarget" }
++        assertEquals("12.5", t.normalized("12,5"))
++        assertEquals("2.0", t.normalized("2"))
++        assertNull(t.normalized("1.9"))
++        assertNull(t.normalized("NaN"))
++        assertNull(t.normalized("Infinity"))
++    }
++    @Test fun integerAndZeroPause() {
++        val f = CameraConfigFields.all.first { it.key == "fanPauseMin" }
++        assertEquals("0", f.normalized("0"))
++        assertNull(f.normalized("1.5"))
++        assertNull(f.normalized("-1"))
++    }
++    @Test fun keysAreUnique() {
++        assertEquals(11, CameraConfigFields.all.size)
++        assertEquals(11, CameraConfigFields.all.map { it.key }.toSet().size)
++    }
++}
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 5
+-        versionName = "1.0.4"
++        versionCode = 6
++        versionName = "1.0.5"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -5,7 +5,7 @@
+ 
+     <application
+         android:usesCleartextTraffic="true"
+-        android:allowBackup="true"
++        android:allowBackup="false"
+         android:dataExtractionRules="@xml/data_extraction_rules"
+         android:fullBackupContent="@xml/backup_rules"
+         android:icon="@mipmap/ic_launcher"
+--- a/app/src/main/res/xml/backup_rules.xml
++++ b/app/src/main/res/xml/backup_rules.xml
+@@ -1,13 +1 @@
+-<?xml version="1.0" encoding="utf-8"?><!--
+-   Sample backup rules file; uncomment and customize as necessary.
+-   See https://developer.android.com/guide/topics/data/autobackup
+-   for details.
+-   Note: This file is ignored for devices older than API 31
+-   See https://developer.android.com/about/versions/12/backup-restore
+--->
+-<full-backup-content>
+-    <!--
+-   <include domain="sharedpref" path="."/>
+-   <exclude domain="sharedpref" path="device.xml"/>
+--->
+-</full-backup-content>+<?xml version="1.0" encoding="utf-8"?><full-backup-content><exclude domain="sharedpref" path="cc_connection.xml"/></full-backup-content>--- a/app/src/main/res/xml/data_extraction_rules.xml
++++ b/app/src/main/res/xml/data_extraction_rules.xml
+@@ -1,19 +1 @@
+-<?xml version="1.0" encoding="utf-8"?><!--
+-   Sample data extraction rules file; uncomment and customize as necessary.
+-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+-   for details.
+--->
+-<data-extraction-rules>
+-    <cloud-backup>
+-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+-        <include .../>
+-        <exclude .../>
+-        -->
+-    </cloud-backup>
+-    <!--
+-    <device-transfer>
+-        <include .../>
+-        <exclude .../>
+-    </device-transfer>
+-    -->
+-</data-extraction-rules>+<?xml version="1.0" encoding="utf-8"?><data-extraction-rules><cloud-backup><exclude domain="sharedpref" path="cc_connection.xml"/></cloud-backup><device-transfer><exclude domain="sharedpref" path="cc_connection.xml"/></device-transfer></data-extraction-rules>

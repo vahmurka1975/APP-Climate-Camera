@@ -1,16 +1,18 @@
 {
-  "version": "1.0.3",
-  "versionCode": 4,
-  "kotlin_files_parsed": 12,
-  "xml_files_parsed": 10,
-  "parser": "tree-sitter Kotlin: syntax only",
-  "syntax_errors": [],
-  "icons": "10 legacy PNG; adaptive XML and foreground bitmap; source included",
-  "icon_source_sha256": "78213f51859f6e10512f5c318cd45d553b42fefba879b49e5f343a427d27388c",
+  "version": "1.0.5",
+  "versionCode": 6,
+  "base_commit": "34a9e1ab45a54447bc47f931875897e920639b0e",
+  "kotlin_syntax_files": 18,
+  "kotlin_syntax_errors": [],
+  "xml_parsed": 10,
+  "unchanged_vs_base": [
+    "ProductsScreen.kt",
+    "ProductModels.kt",
+    "ConnectionPolicy.kt",
+    "FreshnessPolicy.kt"
+  ],
   "gradle_build": "NOT RUN: Java and Android SDK unavailable",
   "unit_tests": "NOT RUN",
-  "apk": "NOT BUILT",
-  "device_test": "NOT RUN",
-  "firmware": "UNCHANGED",
-  "github": "NOT MODIFIED"
+  "device_tests": "NOT RUN",
+  "validation_scope": "Static parsing and archive integrity only; does not prove compilation or runtime correctness"
 }
