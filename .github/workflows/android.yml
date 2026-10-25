@@ -54,3 +54,4 @@ jobs:
           name: ClimateCamera-test-reports-${{ github.run_number }}
           path: app/build/reports/tests/testDebugUnitTest/
           if-no-files-found: ignore
+          retention-days: 14

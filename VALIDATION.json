@@ -1,18 +1,24 @@
 {
-  "version": "1.0.5",
-  "versionCode": 6,
-  "base_commit": "34a9e1ab45a54447bc47f931875897e920639b0e",
-  "kotlin_syntax_files": 18,
-  "kotlin_syntax_errors": [],
-  "xml_parsed": 10,
-  "unchanged_vs_base": [
-    "ProductsScreen.kt",
-    "ProductModels.kt",
-    "ConnectionPolicy.kt",
-    "FreshnessPolicy.kt"
-  ],
-  "gradle_build": "NOT RUN: Java and Android SDK unavailable",
-  "unit_tests": "NOT RUN",
-  "device_tests": "NOT RUN",
-  "validation_scope": "Static parsing and archive integrity only; does not prove compilation or runtime correctness"
+  "versionName": "1.0.7",
+  "versionCode": 8,
+  "base": "Repository main downloaded in this reply, contained v1.0.6 / versionCode 7",
+  "jvmTests": {
+    "run": 52,
+    "failed": 0,
+    "new": 15,
+    "method": "Kotlin 2.2.10 compiler + JUnitCore on Java 17; standalone domain models and policy classes, NOT Gradle"
+  },
+  "kotlinSyntax": {
+    "files": 22,
+    "errors": 0,
+    "tool": "tree-sitter-kotlin"
+  },
+  "xmlWellFormed": {
+    "files": 10,
+    "errors": 0
+  },
+  "androidBuild": "NOT RUN: Android SDK and full Android toolchain not configured for this change",
+  "apk": "NOT PROVIDED",
+  "deviceTests": "NOT RUN",
+  "repositoryModified": false
 }
