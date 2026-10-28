@@ -1,0 +1,22 @@
+{
+  "version": "1.0.11",
+  "versionCode": 12,
+  "base": "1.0.10",
+  "checks": {
+    "versionName_1.0.11": true,
+    "versionCode_12": true,
+    "search_state": true,
+    "full_export_preserved": true,
+    "filtered_render": true,
+    "no_credentials_in_change": true,
+    "kotlin_delimiters_balanced": true
+  },
+  "gradleBuild": "not_run",
+  "reason": "JDK/Android SDK are unavailable in the preparation environment",
+  "changed_files": [
+    "app/src/main/java/com/example/climatecamera/ArchiveScreen.kt",
+    "app/build.gradle.kts",
+    "README.md",
+    "RELEASE_v1.0.11_RU.md"
+  ]
+}

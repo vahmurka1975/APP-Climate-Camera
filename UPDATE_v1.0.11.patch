@@ -1,0 +1,76 @@
+--- a/app/src/main/java/com/example/climatecamera/ArchiveScreen.kt
++++ b/app/src/main/java/com/example/climatecamera/ArchiveScreen.kt
+@@ -36,8 +36,16 @@
+     var detail by remember { mutableStateOf<ArchivedProduct?>(null) }
+     var editing by remember { mutableStateOf<ArchivedProduct?>(null) }
+     var exportText by rememberSaveable { mutableStateOf("") }
++    var archiveQuery by rememberSaveable { mutableStateOf("") }
+     val cameraKey = remember(connection?.address) {
+         connection?.let { runCatching { ArchivePolicy.cameraKey(it.address) }.getOrNull() }
++    }
++    val visibleEntries = entries.filter { entry ->
++        val q = archiveQuery.trim().lowercase(Locale.getDefault())
++        q.isBlank() || listOf(
++            entry.name, entry.notes, entry.state.label, entry.product.id.toString(),
++            entry.product.startDate
++        ).any { it.lowercase(Locale.getDefault()).contains(q) }
+     }
+     val readArchive: suspend () -> Unit = {
+         entries = withContext(Dispatchers.IO) { store.list() }
+@@ -82,7 +90,18 @@
+         OutlinedButton(enabled = !busy, onClick = { load() }) { Text("Обновить архив") }
+         if (loaded && entries.isEmpty()) Text("Архив пока пуст. Продукты сохраняются перед извлечением через это приложение.")
+         if (entries.isNotEmpty()) {
+-            Text("Сохранённых копий: ${entries.size}")
++            OutlinedTextField(
++                value = archiveQuery,
++                onValueChange = { archiveQuery = it },
++                modifier = Modifier.fillMaxWidth(),
++                label = { Text("Поиск в архиве") },
++                placeholder = { Text("Название, заметки, слот или состояние") },
++                singleLine = true
++            )
++            Text(
++                if (archiveQuery.isBlank()) "Сохранённых копий: ${entries.size}"
++                else "Показано: ${visibleEntries.size} из ${entries.size}"
++            )
+             OutlinedButton(enabled = !busy, onClick = {
+                 exportText = archiveCsv(entries)
+                 exporter.launch("climate-archive.csv")
+@@ -112,7 +131,7 @@
+                 }
+             }) { Text("Поделиться CSV") }
+         }
+-        entries.forEach { entry ->
++        visibleEntries.forEach { entry ->
+             val p = entry.product
+             Card(modifier = Modifier.fillMaxWidth()) {
+                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -13,8 +13,8 @@
+         applicationId = "com.example.climatecamera"
+         minSdk = 24
+         targetSdk = 37
+-        versionCode = 11
+-        versionName = "1.0.10"
++        versionCode = 12
++        versionName = "1.0.11"
+ 
+         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+     }
+--- a/README.md
++++ b/README.md
+@@ -1,8 +1,10 @@
+-# ClimateCamera Android v1.0.10 — исходники
++# ClimateCamera Android v1.0.11 — исходники
+ 
+-Версия 1.0.10, versionCode = 11. Основа: main репозитория vahmurka1975/APP-Climate-Camera, загруженная при подготовке этого обновления; в исходной базе указана версия 1.0.9 / 10. Это исходники для Android Studio, не APK. GitHub и прошивка ESP32 не изменялись.
++Версия 1.0.10, versionCode = 12. Основа: main репозитория vahmurka1975/APP-Climate-Camera, загруженная при подготовке этого обновления; в исходной базе указана версия 1.0.9 / 10. Это исходники для Android Studio, не APK. GitHub и прошивка ESP32 не изменялись.
+ 
+ ## Изменения
++
++В архиве продуктов добавлен локальный поиск по названию, заметкам, номеру слота, дате закладки и состоянию. Фильтрация влияет только на отображение списка; экспорт CSV по-прежнему включает весь архив.
+ 
+ Капсула «Камера доступна» теперь отображается только во вкладке «Настройки». В неё перенесён текст «Данные актуальны · получены N с назад». Для ошибки, устаревших данных и остановленного обновления выводятся соответствующие честные статусы. Возраст рассчитывается по монотонным часам Android и обновляется раз в секунду.
+ 

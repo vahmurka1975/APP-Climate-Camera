@@ -36,8 +36,16 @@ internal fun ArchiveScreen(connection: ConnectionSettings?) {
     var detail by remember { mutableStateOf<ArchivedProduct?>(null) }
     var editing by remember { mutableStateOf<ArchivedProduct?>(null) }
     var exportText by rememberSaveable { mutableStateOf("") }
+    var archiveQuery by rememberSaveable { mutableStateOf("") }
     val cameraKey = remember(connection?.address) {
         connection?.let { runCatching { ArchivePolicy.cameraKey(it.address) }.getOrNull() }
+    }
+    val visibleEntries = entries.filter { entry ->
+        val q = archiveQuery.trim().lowercase(Locale.getDefault())
+        q.isBlank() || listOf(
+            entry.name, entry.notes, entry.state.label, entry.product.id.toString(),
+            entry.product.startDate
+        ).any { it.lowercase(Locale.getDefault()).contains(q) }
     }
     val readArchive: suspend () -> Unit = {
         entries = withContext(Dispatchers.IO) { store.list() }
@@ -82,7 +90,18 @@ internal fun ArchiveScreen(connection: ConnectionSettings?) {
         OutlinedButton(enabled = !busy, onClick = { load() }) { Text("Обновить архив") }
         if (loaded && entries.isEmpty()) Text("Архив пока пуст. Продукты сохраняются перед извлечением через это приложение.")
         if (entries.isNotEmpty()) {
-            Text("Сохранённых копий: ${entries.size}")
+            OutlinedTextField(
+                value = archiveQuery,
+                onValueChange = { archiveQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Поиск в архиве") },
+                placeholder = { Text("Название, заметки, слот или состояние") },
+                singleLine = true
+            )
+            Text(
+                if (archiveQuery.isBlank()) "Сохранённых копий: ${entries.size}"
+                else "Показано: ${visibleEntries.size} из ${entries.size}"
+            )
             OutlinedButton(enabled = !busy, onClick = {
                 exportText = archiveCsv(entries)
                 exporter.launch("climate-archive.csv")
@@ -112,7 +131,7 @@ internal fun ArchiveScreen(connection: ConnectionSettings?) {
                 }
             }) { Text("Поделиться CSV") }
         }
-        entries.forEach { entry ->
+        visibleEntries.forEach { entry ->
             val p = entry.product
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
